@@ -112,3 +112,28 @@ def run_eda(df: pd.DataFrame) -> None:
 
     print("\nTop tương quan với Sales:")
     print(corr["Sales"].drop("Sales").sort_values(ascending=False))
+
+#Xuất DataFrame đã sạch ra HDFS dưới dạng Parquet
+
+def export_clean(df: pd.DataFrame, spark) -> None:
+    
+    df_export = df.copy()
+    df_export["Date"] = df_export["Date"].astype(str)
+    for col in df_export.select_dtypes(include=[object]).columns:
+        df_export[col] = df_export[col].astype(str)
+    sdf = spark.createDataFrame(df_export)
+    sdf.write.mode("overwrite").parquet(OUTPUT_PATH)
+    print(f"\n Đã lưu df_clean → {OUTPUT_PATH}")
+
+#Chạy toàn bộ pipeline
+
+if __name__ == "__main__":
+    spark = get_spark("01_Data_EDA")
+
+    df_sales, df_stores = load_data(spark)
+    df = clean_and_join(df_sales, df_stores)
+    run_eda(df)
+    export_clean(df, spark)
+
+    spark.stop()
+    print("\n[01] Done.")
