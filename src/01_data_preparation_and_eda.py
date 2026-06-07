@@ -38,3 +38,17 @@ df_store_spark = spark.read.csv(f"{HDFS_ROOT}/store.csv", header=True, inferSche
 
 print("Sales shape:", (df_sales_spark.count(), len(df_sales_spark.columns)))
 print("Store shape:", (df_store_spark.count(), len(df_store_spark.columns)))
+
+df_sales  = df_sales_spark.toPandas()
+df_store  = df_store_spark.toPandas()
+
+df_sales["Date"] = pd.to_datetime(df_sales["Date"])
+df_sales = df_sales.sort_values("Date").reset_index(drop=True)
+
+print("Sales shape:", df_sales.shape)
+df_sales.head()
+
+df_sales.describe()
+
+print("Missing values – Sales:")
+print(df_sales.isnull().sum())
