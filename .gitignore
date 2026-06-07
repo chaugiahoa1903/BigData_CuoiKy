@@ -3,3 +3,4 @@ data/store.csv
 __pycache__/
 *.pyc
 .ipynb_checkpoints/
+.vscode/
