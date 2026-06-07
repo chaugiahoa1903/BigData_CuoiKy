@@ -23,4 +23,18 @@ from pyspark.ml.evaluation import RegressionEvaluator
 
 from pyspark.ml.tuning import CrossValidator, ParamGridBuilder
 
+spark = SparkSession.builder \
+        .appName("Rossmann_BigData_MLlib") \
+        .config("spark.sql.shuffle.partitions", "4") \
+        .getOrCreate()
 
+spark.sparkContext.setLogLevel("WARN")
+print("Spark version:", spark.version)
+
+HDFS_ROOT = "hdfs://localhost:9000/user/project/rossmann/"
+
+df_sales_spark = spark.read.csv(f"{HDFS_ROOT}/sale.csv", header=True, inferSchema=True)
+df_store_spark = spark.read.csv(f"{HDFS_ROOT}/store.csv", header=True, inferSchema=True)
+
+print("Sales shape:", (df_sales_spark.count(), len(df_sales_spark.columns)))
+print("Store shape:", (df_store_spark.count(), len(df_store_spark.columns)))
