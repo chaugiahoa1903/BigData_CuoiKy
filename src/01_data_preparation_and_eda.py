@@ -68,3 +68,51 @@ df["Date"] = pd.to_datetime(df["Date"])
 print("Merged shape:", df.shape)
 df.head()
 
+df_open = df[df["Sales"] > 0].copy()
+
+plt.figure(figsize=(12, 8))
+plt.hist(df_open["Sales"], bins=50)
+plt.title("Phân phối của Sales")
+plt.xlabel("Sales")
+plt.ylabel("Frequency")
+plt.show()
+#giá trị Sales daily
+daily  = df_open.groupby("Date")["Sales"].mean()
+promo_days = df_open[df_open["Promo"] == 1].groupby("Date")["Sales"].mean()
+
+plt.figure(figsize=(14, 4))
+plt.plot(daily.index, daily.values, color= "steelblue", linewidth=1)
+plt.scatter(promo_days.index, promo_days.values, color="red", label="Có Promo", s=5)
+plt.title("Doanh số trung bình Sales theo ngày", weight="bold")
+plt.legend()
+plt.show()
+
+fig, axes = plt.subplots(1, 2 , figsize=(12, 4))
+
+dow = df_open.groupby("DayOfWeek")["Sales"].mean()
+axes[0].bar(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], dow.values, color="steelblue")
+axes[0].set_title("Sales theo ngày trong tuần", weight="bold")
+axes[0].set_ylabel("Giá trị Sale trung bình", weight="bold")
+
+month = df_open.groupby("DayOfWeeks")["Sales"].mean()
+axes[1].bar(range(1, 13), month.values, color="green")
+axes[1].set_title("Sales theo tháng", weight="bold")
+axes[1].set_xlabel("Tháng", weight="bold")
+
+plt.show()
+#Tương quan biến
+numeric_cols = df.select_dtypes(include=[np.number]).columns
+corr = df[numeric_cols].corr()
+
+plt.figure(figsize=(12, 8))
+sns.heatmap(corr, annot=True, cmap="coolwarm", center=0)
+plt.title("Ma trận tương quan giữa các biến", weight="bold")
+plt.show()
+
+print(corr["Sales"].drop("Sales").sort_values(ascending=False))
+
+#Xuất file đã qua xử lý
+OUTPUT_PATH = f"{HDFS_ROOT}/processed_data.csv"
+df.to_csv(OUTPUT_PATH, index=False, encoding="utf-8-sig")
+print(f"Đã xuất file: {OUTPUT_PATH}")
+print(f"   Shape: {df.shape}")
