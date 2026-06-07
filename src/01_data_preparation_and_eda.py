@@ -52,3 +52,19 @@ df_sales.describe()
 
 print("Missing values – Sales:")
 print(df_sales.isnull().sum())
+
+print("Store shape:", df_store.shape)
+df_store.head()
+df_store.describe()
+print("Missing values – Store:")
+print(df_store.isnull().sum())
+
+df_store["CompetitionDistance"] = df_store["CompetitionDistance"].fillna(df_store["CompetitionDistance"].mean(), inplace=True)
+
+df_store.head()
+
+df = df_sales.merge(right=df_store, on="Store", how="left")
+df["Date"] = pd.to_datetime(df["Date"])
+print("Merged shape:", df.shape)
+df.head()
+
