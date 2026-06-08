@@ -33,3 +33,14 @@ df["Promo_Weekend"] = df["Promo"] * df["IsWeekend"]
 df["Promo_Month"]   = df["Promo"] * df["Month"]
 df["Sales_per_Customer"] = df["Sales"] / df["Customers"].replace(0, np.nan)
 
+df = pd.get_dummies(df, columns=["DayOfWeek"], prefix = "DOW")
+
+shape_before = df.shape
+df = df.dropna().reset_index(drop=True)
+print(f"Shape trước khi xử lý: {shape_before}")
+print(f"Shape sau khi xử lý: {df.shape}")
+
+categorical_cols = ["StateHoliday", "StoreType", "Assortment"]
+df = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
+
+df = df.sort_values(by="Date").reset_index(drop=True)
