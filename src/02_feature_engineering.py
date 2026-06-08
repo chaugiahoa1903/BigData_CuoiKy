@@ -44,3 +44,24 @@ categorical_cols = ["StateHoliday", "StoreType", "Assortment"]
 df = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
 
 df = df.sort_values(by="Date").reset_index(drop=True)
+
+exclude_cols = [
+    "Date", "Sales", "Sale",
+    "Customers", "PromoInterval", "Store"
+]
+
+features = [col for col in df.columns if col not in exclude_cols]
+
+X = df[features]
+y = df["Sales"]
+
+print("Số features:", len(features))
+print(features)
+
+
+import json
+df.to_csv("../data/df_features.csv", index=False)
+with open("../data/features.json", "w") as f:
+    json.dump(features, f, indent=2)
+
+print("Đã lưu df_features.csv và features.json")
