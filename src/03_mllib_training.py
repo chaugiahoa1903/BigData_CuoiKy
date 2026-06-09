@@ -35,3 +35,17 @@ sdf = spark.read.csv(
     inferSchema=True
 )
 print("Loaded df_features:", sdf.count(), "rows,", len(sdf.columns), "cols")
+
+total = sdf.count()
+train_count = int(total * 0.8)
+w   = Window.orderBy(lit(1))
+sdf = sdf.withColumn("_row_id", row_number().over(w))
+
+train_sdf = sdf.filter(F.col("_row_id") <= train_count).drop("_row_id")
+test_sdf  = sdf.filter(F.col("_row_id") >  train_count).drop("_row_id")
+
+train_sdf.cache()
+test_sdf.cache()
+
+print(f"Số mẫu train : {train_sdf.count():,}")
+print(f"Số mẫu test  : {test_sdf.count():,}")
