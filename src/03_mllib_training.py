@@ -72,3 +72,46 @@ evaluator_mae = RegressionEvaluator(
 evaluator_r2 = RegressionEvaluator(
     labelCol="Sales", predictionCol="prediction", metricName="r2"
 )
+tune_sdf, _ = train_sdf.randomSplit([0.1, 0.9], seed=42)
+tune_sdf.cache()
+
+print(f"Số mẫu tune  : {tune_sdf.count():,}  (10% train)")
+print(f"\n{'='*55}")
+print("  Tuning: RandomForestRegressor")
+print(f"{'='*55}")
+
+rf_tune = RandomForestRegressor(
+    featuresCol="features_scaled",
+    labelCol="Sales",
+    seed=42
+)
+
+pipeline_rf_tune = Pipeline(stages=[assembler, scaler, rf_tune])
+
+rf_param_grid = (
+    ParamGridBuilder()
+    .addGrid(rf_tune.numTrees,            [50, 100])
+    .addGrid(rf_tune.maxDepth,            [6, 8])
+    .addGrid(rf_tune.minInstancesPerNode, [2])
+    .build()
+)
+cv_rf = CrossValidator(
+    estimator=pipeline_rf_tune,
+    estimatorParamMaps=rf_param_grid,
+    evaluator=evaluator_rmse,
+    numFolds=2,
+    seed=42,
+    parallelism=1   
+)
+
+print("Đang chạy CrossValidator RF (4 tổ hợp × 2 folds = 8 fits)...")
+cv_rf_model = cv_rf.fit(tune_sdf)
+
+best_rf_stage    = cv_rf_model.bestModel.stages[-1]
+best_rf_numTrees = best_rf_stage.getNumTrees
+best_rf_maxDepth = best_rf_stage.getMaxDepth()
+best_rf_minInst  = best_rf_stage.getMinInstancesPerNode()
+
+print(f"  RF best numTrees          : {best_rf_numTrees}")
+print(f"  RF best maxDepth          : {best_rf_maxDepth}")
+print(f"  RF best minInstancesPerNode: {best_rf_minInst}")
