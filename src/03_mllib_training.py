@@ -189,3 +189,72 @@ model_configs = {
     "RandomForestRegressor": rf,
     "GBTRegressor"        : gbt,
 }
+
+mllib_results     = {}
+mllib_models      = {}
+mllib_predictions = {}
+
+for name, estimator in model_configs.items():
+    print(f"\n{'='*55}")
+    print(f"  Training: {name}")
+    print(f"{'='*55}")
+
+    pipeline = Pipeline(stages=[assembler, scaler, estimator])
+    fitted   = pipeline.fit(train_sdf)      # ← full train set
+    preds    = fitted.transform(test_sdf)
+
+    rmse = evaluator_rmse.evaluate(preds)
+    mae  = evaluator_mae.evaluate(preds)
+    r2   = evaluator_r2.evaluate(preds)
+
+    mllib_results[name]     = {"RMSE": rmse, "MAE": mae, "R2": r2}
+    mllib_models[name]      = fitted
+    mllib_predictions[name] = preds
+
+    print(f"  RMSE : {rmse:,.2f}")
+    print(f"  MAE  : {mae:,.2f}")
+    print(f"  R²   : {r2:.4f}")
+    
+results_df = pd.DataFrame(mllib_results).T.sort_values("RMSE")
+print("\nModel Comparison (Spark MLlib):")
+print(results_df.to_string())
+
+best_model_name  = results_df["RMSE"].idxmin()
+best_mllib_model = mllib_models[best_model_name]
+
+print(f"\nModel tốt nhất: {best_model_name}")
+
+x     = np.arange(2)
+width = 0.25
+names = list(mllib_results.keys())
+
+fig, ax = plt.subplots(figsize=(12, 6))
+
+for idx, name in enumerate(names):
+    vals = [mllib_results[name]["MAE"], mllib_results[name]["RMSE"]]
+    bars = ax.bar(x + idx * width, vals, width, label=name)
+    for bar, val in zip(bars, vals):
+        ax.text(
+            bar.get_x() + bar.get_width() / 2,
+            bar.get_height() + 5,
+            f"{int(val)}", ha="center", va="bottom", fontsize=8
+        )
+
+ax.set_xticks(x + width * (len(names) - 1) / 2)
+ax.set_xticklabels(["MAE", "RMSE"])
+ax.set_title("So sánh MAE và RMSE của các mô hình Spark MLlib")
+ax.set_ylabel("Sai số")
+ax.legend(loc="upper right", fontsize=8)
+ax.grid(axis="y", alpha=0.3)
+
+plt.tight_layout()
+plt.savefig("../data/model_comparison.png", dpi=150)
+plt.show()
+
+MODEL_SAVE_PATH = f"hdfs://localhost:9000/user/hadoop/rossmann/models/{best_model_name}"
+
+best_mllib_model.write().overwrite().save(MODEL_SAVE_PATH)
+print(f"Đã lưu model tại: {MODEL_SAVE_PATH}")
+
+spark.stop()
+print("\n[03] Done.")
