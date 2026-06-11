@@ -102,3 +102,42 @@ df = df.na.drop()
 print("So dong truoc:", n_before, " sau dropna:", df.count())
 df = df.orderBy("Date")
 
+# B1: tap feature UNG VIEN = tat ca cot so, loai label/dinh danh/leakage/raw
+exclude_cols = ["Date", "Sales", "Sale", "Customers", "PromoInterval", "Store",
+                "StateHoliday", "StoreType", "Assortment", "DayOfWeek",
+                "Sales_per_Customer"]   # <- leakage neu co
+numeric_types = ("int", "bigint", "double", "float", "smallint", "tinyint", "long")
+candidate_features = [c for c, t in df.dtypes
+                      if c not in exclude_cols and t in numeric_types]
+print("So feature ung vien:", len(candidate_features))
+
+# B2: UnivariateFeatureSelector - F-test
+assembler = VectorAssembler(inputCols=candidate_features,
+                            outputCol="features_vec", handleInvalid="skip")
+assembled = assembler.transform(df)
+
+selector = UnivariateFeatureSelector(
+    featuresCol="features_vec",
+    outputCol="selectedFeatures",
+    labelCol="Sales",
+    selectionMode="fpr"          # giu feature co p-value < nguong
+)
+selector.setFeatureType("continuous")
+selector.setLabelType("continuous")
+selector.setSelectionThreshold(0.05)   # p < 0.05
+
+sel_model = selector.fit(assembled)
+selected_idx = list(sel_model.selectedFeatures)
+features = [candidate_features[i] for i in selected_idx]
+dropped  = [c for c in candidate_features if c not in features]
+
+print(f"So feature DA CHON: {len(features)} / {len(candidate_features)}")
+print("Feature da chon :", features)
+print("Feature bi loai :", dropped)
+
+save_single_csv(df, f"{HDFS_ROOT}/df_features.csv")
+save_json_hdfs(features, f"{HDFS_ROOT}/features.json")
+
+spark.stop()
+print("[02] Done.")
+
