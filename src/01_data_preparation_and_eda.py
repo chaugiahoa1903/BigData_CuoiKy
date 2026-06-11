@@ -105,3 +105,14 @@ ax[0].set_title("Phan phoi cua Sales"); ax[0].set_xlabel("Sales"); ax[0].set_yla
 ax[1].bar(lcenters, lc, width=lbw, color="seagreen")
 ax[1].set_title("Phan phoi cua Log(Sales)"); ax[1].set_xlabel("log(1+Sales)")
 plt.tight_layout(); plt.show()
+
+#Giá trị trung bình của Sales theo ngày
+daily_pd =(df_open.groupBy("Date").agg(F.sum("Sales").alias("avg")).
+                orderBy("Date").toPandas())
+promo_pd = (df_open.filter(F.col("Promo") == 1)
+            .groupBy("Date").agg(F.avg("Sales").alias("avg"))
+            .orderBy("Date").toPandas())
+plt.figure(figsize=(14, 4))
+plt.plot(daily_pd["Date"], daily_pd["avg"], color="steelblue", linewidth=1)
+plt.scatter(promo_pd["Date"], promo_pd["avg"], color="red", s=5, label="Co Promo")
+plt.title("Gia tri Sales trung binh theo ngay", weight="bold"); plt.legend(); plt.show()
