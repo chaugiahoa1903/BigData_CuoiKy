@@ -44,3 +44,15 @@ train_sdf.cache()
 test_sdf.cache()
 print(f"Số mẫu train : {train_sdf.count():,}")
 print(f"Số mẫu test  : {test_sdf.count():,}")
+
+assembler = VectorAssembler(inputCols=features, outputCol="features_vec", handleInvalid="skip")
+scaler    = StandardScaler(inputCol="features_vec", outputCol="features_scaled",
+                           withStd=True, withMean=False)
+
+evaluator_rmse = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="rmse")
+evaluator_mae  = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="mae")
+evaluator_r2   = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="r2")
+
+tune_sdf, _ = train_sdf.randomSplit([0.1, 0.9], seed=42)
+tune_sdf.cache()
+print(f"Số mẫu tune  : {tune_sdf.count():,}  (10% train)")
