@@ -85,3 +85,23 @@ df_store.show(5)
 df = df_sales.join(df_store, on="Store", how="left")
 print("Merged shape:", (df.count(), len(df.columns))) 
 df.show(5)
+
+
+df_open = df.filter(F.col("Sales") > 0).cache()
+
+#Kiểm tra phân phối của biến Sales và log(Sales)
+buckets, counts = df_open.select("Sales").rdd.map(lambda r: float(r[0])).histogram(50)
+centers = [(buckets[i] + buckets[i + 1]) / 2 for i in range(len(counts))]
+bw = buckets[1] - buckets[0]
+
+lb, lc = (df_open.select(F.log1p("Sales").alias("ls")).rdd
+          .map(lambda r: float(r[0])).histogram(50))
+lcenters = [(lb[i] + lb[i + 1]) / 2 for i in range(len(lc))]
+lbw = lb[1] - lb[0]
+
+fig, ax = plt.subplots(1, 2, figsize=(14, 5))
+ax[0].bar(centers, counts, width=bw, color="steelblue")
+ax[0].set_title("Phan phoi cua Sales"); ax[0].set_xlabel("Sales"); ax[0].set_ylabel("Frequency")
+ax[1].bar(lcenters, lc, width=lbw, color="seagreen")
+ax[1].set_title("Phan phoi cua Log(Sales)"); ax[1].set_xlabel("log(1+Sales)")
+plt.tight_layout(); plt.show()
