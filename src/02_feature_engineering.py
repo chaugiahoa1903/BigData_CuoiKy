@@ -91,6 +91,8 @@ for lag in [1, 3, 7, 14]:
     df = df.withColumn(f"Sales_lag_{lag}",     F.lag("Sales", lag).over(w_store))
     df = df.withColumn(f"Customers_lag_{lag}", F.lag("Customers", lag).over(w_store))
 
+df = df.filter(F.col("Open") == 1)
+
 for w in [7, 14]:
     win = Window.partitionBy("Store").orderBy("Date").rowsBetween(-w, -1)
     df = df.withColumn(f"Sales_roll_mean_{w}", F.avg("Sales").over(win))
