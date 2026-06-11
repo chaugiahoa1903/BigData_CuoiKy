@@ -76,3 +76,19 @@ df = (df
       .withColumn("WeekOfYear", F.weekofyear("Date"))
       .withColumn("DayOfWeek", ((F.dayofweek(F.col("Date")) + 5) % 7 + 1).cast("int")))  # Mon=1..Sun=7
 df = df.withColumn("IsWeekend", F.when(F.col("DayOfWeek").isin(6, 7), 1).otherwise(0))
+
+w_store = Window.partitionBy("Store").orderBy("Date")
+for lag in [1, 3, 7, 14]:
+    df = df.withColumn(f"Sales_lag_{lag}",     F.lag("Sales", lag).over(w_store))
+    df = df.withColumn(f"Customers_lag_{lag}", F.lag("Customers", lag).over(w_store))
+
+for w in [7, 14]:
+    win = Window.partitionBy("Store").orderBy("Date").rowsBetween(-w, -1)
+    df = df.withColumn(f"Sales_roll_mean_{w}", F.avg("Sales").over(win))
+    df = df.withColumn(f"Sales_roll_std_{w}",  F.stddev("Sales").over(win))
+    df = df.withColumn(f"Sales_roll_max_{w}",  F.max("Sales").over(win))
+
+df = (df
+      .withColumn("Promo_Weekend", F.col("Promo") * F.col("IsWeekend"))
+      .withColumn("Promo_Month",   F.col("Promo") * F.col("Month")))
+
