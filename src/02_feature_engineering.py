@@ -92,3 +92,13 @@ df = (df
       .withColumn("Promo_Weekend", F.col("Promo") * F.col("IsWeekend"))
       .withColumn("Promo_Month",   F.col("Promo") * F.col("Month")))
 
+df, _ = add_dummies(df, "DayOfWeek", drop_first=False)   # giu ca 7 cot DOW
+for col in ["StateHoliday", "StoreType", "Assortment"]:
+    df = df.withColumn(col, F.col(col).cast("string"))
+    df, _ = add_dummies(df, col, drop_first=True)
+
+n_before = df.count()
+df = df.na.drop()
+print("So dong truoc:", n_before, " sau dropna:", df.count())
+df = df.orderBy("Date")
+
