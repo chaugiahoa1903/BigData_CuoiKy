@@ -1,9 +1,18 @@
 import json
+import numpy as np
+import pandas as pd
+from scipy.stats import f as f_dist
+import matplotlib.pyplot as plt
+from matplotlib.patches import Patch
 
 from pyspark.sql import SparkSession
 from pyspark.sql import functions as F
 from pyspark.sql.window import Window
 from pyspark.ml.feature import VectorAssembler, UnivariateFeatureSelector
+from pyspark.ml.stat import Correlation
+from pyspark.ml.stat import FValueTest
+
+
 
 spark = (
     SparkSession.builder
@@ -92,7 +101,7 @@ df = (df
       .withColumn("Promo_Weekend", F.col("Promo") * F.col("IsWeekend"))
       .withColumn("Promo_Month",   F.col("Promo") * F.col("Month")))
 
-df, _ = add_dummies(df, "DayOfWeek", drop_first=False)   # giu ca 7 cot DOW
+df, _ = add_dummies(df, "DayOfWeek", drop_first=False)
 for col in ["StateHoliday", "StoreType", "Assortment"]:
     df = df.withColumn(col, F.col(col).cast("string"))
     df, _ = add_dummies(df, col, drop_first=True)
@@ -111,7 +120,7 @@ candidate_features = [c for c, t in df.dtypes
                       if c not in exclude_cols and t in numeric_types]
 print("So feature ung vien:", len(candidate_features))
 
-# B2: UnivariateFeatureSelector - F-test
+# B2: UnivariateFeatureSelector - F-test (feature lien tuc, label lien tuc)
 assembler = VectorAssembler(inputCols=candidate_features,
                             outputCol="features_vec", handleInvalid="skip")
 assembled = assembler.transform(df)
@@ -134,6 +143,74 @@ dropped  = [c for c in candidate_features if c not in features]
 print(f"So feature DA CHON: {len(features)} / {len(candidate_features)}")
 print("Feature da chon :", features)
 print("Feature bi loai :", dropped)
+
+assembler_corr = VectorAssembler(inputCols=candidate_features + ["Sales"],
+                                 outputCol="corr_vec", handleInvalid="skip")
+corr_mat = Correlation.corr(
+    assembler_corr.transform(df).select("corr_vec"), "corr_vec"
+).head()[0].toArray()
+r_with_sales = np.nan_to_num(corr_mat[:-1, -1], nan=0.0)   # cot cuoi = tuong quan voi Sales
+
+n = df.count()
+F_stat  = (n - 2) * (r_with_sales ** 2) / (1 - r_with_sales ** 2 + 1e-12)   # F-test 1 bien
+p_value = f_dist.sf(F_stat, 1, n - 2)                                        # p tu F(1, n-2)
+
+result = pd.DataFrame({
+    "feature":  candidate_features,
+    "abs_corr": np.round(np.abs(r_with_sales), 4),
+    "p_value":  np.round(p_value, 6),
+})
+result["selected"] = result["feature"].isin(features)
+result = result.sort_values("abs_corr", ascending=False).reset_index(drop=True)
+
+print(f"Giu {result['selected'].sum()}/{len(result)} feature")
+print(result)
+
+#Visualization
+import matplotlib.pyplot as plt
+import matplotlib.cm as cm
+from matplotlib.patches import Patch
+from matplotlib.colors import Normalize
+
+plt.rcParams["font.family"] = "DejaVu Sans"
+plt.rcParams["axes.unicode_minus"] = False
+
+plot_df = result.sort_values("abs_corr", ascending=True).reset_index(drop=True)
+xmax    = max(plot_df["abs_corr"].max(), 1e-6)
+
+norm   = Normalize(vmin=0, vmax=xmax)
+greens = cm.get_cmap("Greens")
+colors = [greens(0.35 + 0.6 * norm(v)) if sel else "#c0392b"
+          for v, sel in zip(plot_df["abs_corr"], plot_df["selected"])]
+
+fig, ax = plt.subplots(figsize=(11, 12))
+ax.barh(plot_df["feature"], plot_df["abs_corr"], color=colors,
+        edgecolor="white", linewidth=0.6)
+
+for y, v in enumerate(plot_df["abs_corr"]):
+    ax.text(v + xmax * 0.012, y, f"{v:.3f}", va="center", ha="left",
+            fontsize=8, color="#333333")
+
+ax.set_xlim(0, xmax * 1.14)
+ax.set_xlabel("|Tương quan Pearson với Sales|  (càng cao = liên hệ càng mạnh)",
+              fontsize=11, fontweight="bold")
+ax.set_title(f"Kết Quả Lựa Chọn Đặc Trưng — Giữ {int(result['selected'].sum())}/{len(result)} Đặc Trưng",
+             fontsize=14, fontweight="bold", pad=14)
+
+ax.grid(axis="x", linestyle=":", alpha=0.5)
+ax.set_axisbelow(True)
+ax.spines["top"].set_visible(False)
+ax.spines["right"].set_visible(False)
+ax.tick_params(axis="y", labelsize=8)
+
+leg = ax.legend(handles=[Patch(color=greens(0.75), label="Giữ lại"),
+                         Patch(color="#c0392b",     label="Loại bỏ")],
+                loc="lower right", frameon=True, fontsize=10, title="Trạng thái")
+leg.get_title().set_fontweight("bold")
+
+plt.tight_layout()
+plt.savefig("feature_selection.png", dpi=150, bbox_inches="tight")
+plt.show()
 
 save_single_csv(df, f"{HDFS_ROOT}/df_features.csv")
 save_json_hdfs(features, f"{HDFS_ROOT}/features.json")
