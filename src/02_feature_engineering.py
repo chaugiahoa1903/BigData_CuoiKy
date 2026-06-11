@@ -25,7 +25,7 @@ def save_single_csv(sdf, hdfs_path):
     hadoop = spark._jvm.org.apache.hadoop
     conf = spark._jsc.hadoopConfiguration()
     
-    # Fix: dùng URI để buộc lấy HDFS filesystem
+   
     uri = spark._jvm.java.net.URI(tmp)
     fs = hadoop.fs.FileSystem.get(uri, conf)  # ← dòng fix
     
@@ -66,3 +66,13 @@ def add_dummies(df, col, drop_first=True):
         new_cols.append(safe)
     return df, new_cols
 
+df = spark.read.csv(f"{HDFS_ROOT}/cleaned_rossmann.csv", header=True, inferSchema=True)
+df = df.withColumn("Date", F.to_date("Date"))
+print("cleaned_rossmann:", (df.count(), len(df.columns)))
+
+df = (df
+      .withColumn("Year",       F.year("Date"))
+      .withColumn("Month",      F.month("Date"))
+      .withColumn("WeekOfYear", F.weekofyear("Date"))
+      .withColumn("DayOfWeek", ((F.dayofweek(F.col("Date")) + 5) % 7 + 1).cast("int")))  # Mon=1..Sun=7
+df = df.withColumn("IsWeekend", F.when(F.col("DayOfWeek").isin(6, 7), 1).otherwise(0))
