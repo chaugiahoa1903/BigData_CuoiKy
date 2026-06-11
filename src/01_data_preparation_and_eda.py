@@ -116,3 +116,36 @@ plt.figure(figsize=(14, 4))
 plt.plot(daily_pd["Date"], daily_pd["avg"], color="steelblue", linewidth=1)
 plt.scatter(promo_pd["Date"], promo_pd["avg"], color="red", s=5, label="Co Promo")
 plt.title("Gia tri Sales trung binh theo ngay", weight="bold"); plt.legend(); plt.show()
+# Gia tri trung binh cua Sales theo ngay trong tuan & theo thang
+dow_pd = (df_open.groupBy("DayOfWeek").agg(F.avg("Sales").alias("avg"))
+          .orderBy("DayOfWeek").toPandas())
+month_pd = (df_open.groupBy(F.month("Date").alias("Month"))
+            .agg(F.avg("Sales").alias("avg")).orderBy("Month").toPandas())
+fig, axes = plt.subplots(1, 2, figsize=(12, 4))
+axes[0].bar(["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"], dow_pd["avg"], color="steelblue")
+axes[0].set_title("Sales theo ngay trong tuan", weight="bold"); axes[0].set_ylabel("Avg Sales")
+axes[1].bar(month_pd["Month"], month_pd["avg"], color="green")
+axes[1].set_title("Sales theo thang", weight="bold"); axes[1].set_xlabel("Thang")
+plt.tight_layout(); plt.show()
+
+#Kiem tra moi tuong quan giua Sales va cac bien
+num_cols = [c for c, t in df.dtypes
+            if t in ("int", "bigint", "double", "float", "smallint", "tinyint")]
+vec_df = (VectorAssembler(inputCols=num_cols, outputCol="cv", handleInvalid="skip")
+          .transform(df.na.drop(subset=num_cols)).select("cv"))
+corr_mat = Correlation.corr(vec_df, "cv").head()[0].toArray()
+corr_pd = pd.DataFrame(corr_mat, index=num_cols, columns=num_cols)
+plt.figure(figsize=(12, 8))
+sns.heatmap(corr_pd, annot=True, fmt=".2f", cmap="coolwarm", center=0)
+plt.title("Ma tran tuong quan giua Sales va cac bien", weight="bold"); plt.show()
+print(corr_pd["Sales"].drop("Sales").sort_values(ascending=False))
+
+df_open.unpersist()
+
+
+#xuat data ra hdfs
+save_single_csv(df, f"{HDFS_ROOT}/cleaned_rossmann.csv")
+print("Da xuat cleaned_rossmann.csv, shape:", (df.count(), len(df.columns)))
+
+spark.stop()
+print("[01] Done.")
