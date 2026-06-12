@@ -56,3 +56,49 @@ evaluator_r2   = RegressionEvaluator(labelCol="Sales", predictionCol="prediction
 tune_sdf, _ = train_sdf.randomSplit([0.1, 0.9], seed=42)
 tune_sdf.cache()
 print(f"Số mẫu tune  : {tune_sdf.count():,}  (10% train)")
+
+print(f"\n{'='*55}\n  Tuning: RandomForestRegressor\n{'='*55}")
+rf_tune = RandomForestRegressor(featuresCol="features_scaled", labelCol="Sales", seed=42)
+pipeline_rf_tune = Pipeline(stages=[assembler, scaler, rf_tune])
+rf_param_grid = (
+    ParamGridBuilder()
+    .addGrid(rf_tune.numTrees,            [50, 100])
+    .addGrid(rf_tune.maxDepth,            [6, 8])
+    .addGrid(rf_tune.minInstancesPerNode, [2])
+    .build()
+)
+cv_rf = CrossValidator(estimator=pipeline_rf_tune, estimatorParamMaps=rf_param_grid,
+                       evaluator=evaluator_rmse, numFolds=2, seed=42, parallelism=1)
+print("Đang chạy CrossValidator RF (4 tổ hợp × 2 folds = 8 fits)...")
+cv_rf_model = cv_rf.fit(tune_sdf)
+
+best_rf_stage    = cv_rf_model.bestModel.stages[-1]
+best_rf_numTrees = best_rf_stage.getNumTrees
+best_rf_maxDepth = best_rf_stage.getMaxDepth()
+best_rf_minInst  = best_rf_stage.getMinInstancesPerNode()
+print(f"  RF best numTrees           : {best_rf_numTrees}")
+print(f"  RF best maxDepth           : {best_rf_maxDepth}")
+print(f"  RF best minInstancesPerNode: {best_rf_minInst}")
+
+print(f"\n{'='*55}\n  Tuning: GBTRegressor\n{'='*55}")
+gbt_tune = GBTRegressor(featuresCol="features_scaled", labelCol="Sales", seed=42)
+pipeline_gbt_tune = Pipeline(stages=[assembler, scaler, gbt_tune])
+gbt_param_grid = (
+    ParamGridBuilder()
+    .addGrid(gbt_tune.maxIter,  [50, 100])
+    .addGrid(gbt_tune.maxDepth, [4, 6])
+    .addGrid(gbt_tune.stepSize, [0.1])
+    .build()
+)
+cv_gbt = CrossValidator(estimator=pipeline_gbt_tune, estimatorParamMaps=gbt_param_grid,
+                        evaluator=evaluator_rmse, numFolds=2, seed=42, parallelism=1)
+print("Đang chạy CrossValidator GBT (4 tổ hợp × 2 folds = 8 fits)...")
+cv_gbt_model = cv_gbt.fit(tune_sdf)
+
+best_gbt_stage    = cv_gbt_model.bestModel.stages[-1]
+best_gbt_maxIter  = best_gbt_stage.getMaxIter()
+best_gbt_maxDepth = best_gbt_stage.getMaxDepth()
+best_gbt_stepSize = best_gbt_stage.getStepSize()
+print(f"  GBT best maxIter  : {best_gbt_maxIter}")
+print(f"  GBT best maxDepth : {best_gbt_maxDepth}")
+print(f"  GBT best stepSize : {best_gbt_stepSize}")
