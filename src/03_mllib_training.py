@@ -141,3 +141,57 @@ print(results_df.to_string())
 best_model_name  = results_df["RMSE"].idxmin()
 best_mllib_model = mllib_models[best_model_name]
 print(f"\nModel tốt nhất: {best_model_name}")
+
+def report_importance(fitted_pipeline, feature_names, model_name, top_n=20):
+    stage = fitted_pipeline.stages[-1]
+    print(f"\n{'='*55}\n  Feature importance: {model_name}\n{'='*55}")
+    if hasattr(stage, "featureImportances"):
+        vals = stage.featureImportances.toArray()
+        ranked = sorted(zip(feature_names, vals), key=lambda x: x[1], reverse=True)
+        for nm, v in ranked[:top_n]:
+            print(f"  {nm:30s} {v:.5f}")
+        return ranked
+    elif hasattr(stage, "coefficients"):
+        vals = stage.coefficients.toArray()
+        ranked = sorted(zip(feature_names, vals), key=lambda x: abs(x[1]), reverse=True)
+        for nm, v in ranked[:top_n]:
+            print(f"  {nm:30s} {v:+.5f}")
+        return ranked
+    return []
+
+
+importance_tables = {}
+for name, fitted in mllib_models.items():
+    importance_tables[name] = report_importance(fitted, features, name)
+
+best_stage = best_mllib_model.stages[-1]
+if hasattr(best_stage, "featureImportances"):
+    top = importance_tables[best_model_name][:15][::-1]
+    names_top = [t[0] for t in top]
+    vals_top  = [t[1] for t in top]
+    plt.figure(figsize=(10, 7))
+    plt.barh(names_top, vals_top, color="teal")
+    plt.title(f"Top 15 Feature Importance – {best_model_name}", weight="bold")
+    plt.xlabel("Importance")
+    plt.tight_layout()
+    plt.savefig("feature_importance.png", dpi=150)
+    plt.show()
+    
+x, width = np.arange(2), 0.25
+names = list(mllib_results.keys())
+fig, ax = plt.subplots(figsize=(12, 6))
+for idx, name in enumerate(names):
+    vals = [mllib_results[name]["MAE"], mllib_results[name]["RMSE"]]
+    bars = ax.bar(x + idx * width, vals, width, label=name)
+    for bar, val in zip(bars, vals):
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 5,
+                f"{int(val)}", ha="center", va="bottom", fontsize=8)
+ax.set_xticks(x + width * (len(names) - 1) / 2)
+ax.set_xticklabels(["MAE", "RMSE"])
+ax.set_title("So sánh MAE và RMSE của các mô hình Spark MLlib")
+ax.set_ylabel("Sai số")
+ax.legend(loc="upper right", fontsize=8)
+ax.grid(axis="y", alpha=0.3)
+plt.tight_layout()
+plt.savefig("model_comparison.png", dpi=150)
+plt.show()
