@@ -195,3 +195,10 @@ ax.grid(axis="y", alpha=0.3)
 plt.tight_layout()
 plt.savefig("model_comparison.png", dpi=150)
 plt.show()
+
+MODEL_SAVE_PATH = f"{HDFS_ROOT}/models/{best_model_name}"
+best_mllib_model.write().overwrite().save(MODEL_SAVE_PATH)
+print(f"Đã lưu model tại: {MODEL_SAVE_PATH}")
+
+spark.stop()
+print("[03] Done.")
