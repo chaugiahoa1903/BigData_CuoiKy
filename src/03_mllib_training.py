@@ -102,3 +102,42 @@ best_gbt_stepSize = best_gbt_stage.getStepSize()
 print(f"  GBT best maxIter  : {best_gbt_maxIter}")
 print(f"  GBT best maxDepth : {best_gbt_maxDepth}")
 print(f"  GBT best stepSize : {best_gbt_stepSize}")
+
+lr = LinearRegression(featuresCol="features_scaled", labelCol="Sales",
+                      maxIter=100, regParam=0.01, elasticNetParam=0.0)
+rf = RandomForestRegressor(featuresCol="features_scaled", labelCol="Sales",
+                           numTrees=best_rf_numTrees, maxDepth=best_rf_maxDepth,
+                           minInstancesPerNode=best_rf_minInst, seed=42)
+gbt = GBTRegressor(featuresCol="features_scaled", labelCol="Sales",
+                   maxIter=best_gbt_maxIter, maxDepth=best_gbt_maxDepth,
+                   stepSize=best_gbt_stepSize, subsamplingRate=0.8, seed=42)
+
+model_configs = {
+    "LinearRegression":      lr,
+    "RandomForestRegressor": rf,
+    "GBTRegressor":          gbt,
+}
+mllib_results = {}
+mllib_models  = {}
+for name, estimator in model_configs.items():
+    print(f"\n{'='*55}\n  Training: {name}\n{'='*55}")
+    pipeline = Pipeline(stages=[assembler, scaler, estimator])
+    fitted   = pipeline.fit(train_sdf)
+    preds    = fitted.transform(test_sdf)
+
+    rmse = evaluator_rmse.evaluate(preds)
+    mae  = evaluator_mae.evaluate(preds)
+    r2   = evaluator_r2.evaluate(preds)
+    mllib_results[name] = {"RMSE": rmse, "MAE": mae, "R2": r2}
+    mllib_models[name]  = fitted
+    print(f"  RMSE : {rmse:,.2f}")
+    print(f"  MAE  : {mae:,.2f}")
+    print(f"  R²   : {r2:.4f}")
+
+results_df = pd.DataFrame(mllib_results).T.sort_values("RMSE")
+print("\nModel Comparison (Spark MLlib):")
+print(results_df.to_string())
+
+best_model_name  = results_df["RMSE"].idxmin()
+best_mllib_model = mllib_models[best_model_name]
+print(f"\nModel tốt nhất: {best_model_name}")
