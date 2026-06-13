@@ -131,4 +131,31 @@ with c2:
         </div>
     """, unsafe_allow_html=True)
 
-#
+# Cấu hình đường dẫn đọc file trên HDFS
+
+_HDFS_ROOT          = "hdfs://localhost:9000/user/project/rossmann"
+MLLIB_MODEL_PATH    = f"{_HDFS_ROOT}/models/GBTRegressor"
+CLEANED_CSV_HDFS    = f"{_HDFS_ROOT}/cleaned_rossmann.csv"
+FEATURES_JSON_HDFS  = f"{_HDFS_ROOT}/features.json"
+
+
+def _find_hdfs_cmd():
+    """
+    Tìm đường dẫn đầy đủ tới lệnh hdfs.
+    Trên Windows lệnh thật là hdfs.cmd (subprocess không tự thêm .cmd như
+    PowerShell), nên thử lần lượt: hdfs.cmd / hdfs trong PATH, rồi
+    %HADOOP_HOME%\\bin. Tránh lỗi 'Không tìm thấy lệnh hdfs'.
+    """
+    import shutil
+    for name in ("hdfs.cmd", "hdfs"):
+        found = shutil.which(name)
+        if found:
+            return found
+    hadoop_home = os.environ.get("HADOOP_HOME")
+    if hadoop_home:
+        for name in ("hdfs.cmd", "hdfs"):
+            cand = os.path.join(hadoop_home, "bin", name)
+            if os.path.exists(cand):
+                return cand
+    return None
+
