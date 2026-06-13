@@ -108,10 +108,15 @@ for col in ["StateHoliday", "StoreType", "Assortment"]:
     df = df.withColumn(col, F.col(col).cast("string"))
     df, _ = add_dummies(df, col, drop_first=True)
 
+from pyspark import StorageLevel
+
 n_before = df.count()
 df = df.na.drop()
-print("So dong truoc:", n_before, " sau dropna:", df.count())
 df = df.orderBy("Date")
+df = df.persist(StorageLevel.MEMORY_AND_DISK)
+
+print("Số dòng trước:", n_before, " sau khi dropna:", df.count())
+print("Đã persist df với StorageLevel.MEMORY_AND_DISK")
 
 # B1: tap feature UNG VIEN = tat ca cot so, loai label/dinh danh/leakage/raw
 exclude_cols = ["Date", "Sales", "Sale", "Customers", "PromoInterval", "Store",

@@ -53,6 +53,12 @@ evaluator_rmse = RegressionEvaluator(labelCol="Sales", predictionCol="prediction
 evaluator_mae  = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="mae")
 evaluator_r2   = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="r2")
 
+#Phân tích kế hoạch thực thi
+print("EXPLAIN: Kế hoạch tiền xử lý trên train_sdf")
+print()
+_explain_model = Pipeline(stages=[assembler, scaler]).fit(train_sdf)
+_explain_model.transform(train_sdf).explain(mode="formatted")
+
 tune_sdf, _ = train_sdf.randomSplit([0.1, 0.9], seed=42)
 tune_sdf.cache()
 print(f"Số mẫu tune  : {tune_sdf.count():,}  (10% train)")
