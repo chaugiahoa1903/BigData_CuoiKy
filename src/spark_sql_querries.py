@@ -87,4 +87,26 @@ spark.sql("""
     ORDER BY StoreType, xep_hang
 """).show()
 
+# Query 5: Ta dùng Time Series + Window Function để kiểm tra tốc độ tăng trưởng doanh thu tháng so với tháng trước
 
+spark.sql("""
+    SELECT
+        nam, thang,
+        tong_doanh_thu,
+        LAG(tong_doanh_thu) OVER (ORDER BY nam, thang)  AS thang_truoc,
+        ROUND(
+            (tong_doanh_thu
+             - LAG(tong_doanh_thu) OVER (ORDER BY nam, thang))
+            / LAG(tong_doanh_thu) OVER (ORDER BY nam, thang) * 100
+        , 2)                                            AS tang_truong_pct
+    FROM (
+        SELECT
+            YEAR(Date)          AS nam,
+            MONTH(Date)         AS thang,
+            ROUND(SUM(Sales), 2) AS tong_doanh_thu
+        FROM sales
+        WHERE Open = 1 AND Sales > 0
+        GROUP BY YEAR(Date), MONTH(Date)
+    )
+    ORDER BY nam, thang
+""").show(36)
