@@ -133,3 +133,20 @@ spark.sql("""
     ORDER BY doanh_thu_tb ASC
     LIMIT 20
 """).show()
+
+#Query 7: Sử dụng Group By + Aggregation để tìm doanh thu theo ngày trong tuần — ngày nào bán được nhiều nhất
+print("\n" + "="*60)
+print("QUERY 7: Doanh thu theo ngày trong tuần")
+print("="*60)
+
+spark.sql("""
+    SELECT
+        DayOfWeek,
+        ROUND(AVG(Sales), 2)                AS doanh_thu_tb,
+        ROUND(AVG(Customers), 2)            AS khach_tb,
+        COUNT(*)                            AS so_ngay_ghi_nhan
+    FROM sales
+    WHERE Open = 1 AND Sales > 0
+    GROUP BY DayOfWeek
+    ORDER BY DayOfWeek
+""").show()
