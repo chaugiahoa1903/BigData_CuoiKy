@@ -310,6 +310,64 @@ for key in ['bi_report', 'baseline_report', 'df_chart_display']:
     if key not in st.session_state:
         st.session_state[key] = None
 
+# Thông tin tên các tab trong web app
 tab_home, tab_predict, tab_analytics = st.tabs([
     "TRANG CHỦ", "DỰ BÁO", "THỐNG KÊ"
 ])
+
+
+
+#TAB 1 : Trang chủ
+with tab_home:
+    st.markdown("""
+        <div class="hero-banner">
+            <h2 style="font-size: 2.5rem; font-weight: 800; margin-bottom: 0.5rem;">
+                Chào mừng đến với Rossmann Forecasting App
+            </h2>
+            <p style="font-size: 1rem; color: rgba(255,255,255,0.8);
+                      max-width: 600px; margin-bottom: 1.5rem;">
+                Hệ thống dự báo doanh thu thông minh dành cho chuỗi cửa hàng
+                bán lẻ dược phẩm hàng đầu Châu Âu.
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
+
+    mask = (df['Date'] >= '2013-01-01') & (df['Date'] <= '2015-07-31')
+    df_history = df[mask]
+    avg_sales_hist = df_history['Sales'].mean() if not df_history.empty else 0
+    avg_cust_hist = df_history['Customers'].mean() if not df_history.empty else 0
+    total_stores = df['Store'].nunique()
+
+    def render_info_card(icon, title, value, desc):
+        return f"""
+        <div class="glass-card">
+            <div style="width: 40px; height: 40px; border-radius: 10px;
+                        background-color: #FEF2F2; display: flex;
+                        justify-content: center; align-items: center; margin-bottom: 10px;">
+                <span style="font-size: 20px;">{icon}</span>
+            </div>
+            <p style="font-size: 10px; font-weight: bold; color: #6B7280;
+                      text-transform: uppercase; letter-spacing: 1px; margin:0;">{title}</p>
+            <p style="font-size: 28px; font-weight: 900; color: #111827;
+                      margin: 5px 0;">{value}</p>
+            <p style="font-size: 12px; color: #6B7280; margin:0;">{desc}</p>
+        </div>
+        """
+
+    col1, col2, col3 = st.columns(3)
+    with col1:
+        st.markdown(render_info_card(
+            "📍", "Mạng lưới chi nhánh",
+            f"{total_stores:,.0f}", "Cửa hàng đang hoạt động."
+        ), unsafe_allow_html=True)
+    with col2:
+        st.markdown(render_info_card(
+            "💰", "Doanh thu trung bình",
+            f"€{avg_sales_hist:,.0f}", "Mỗi ngày/cửa hàng (01/2013 - 07/2015)"
+        ), unsafe_allow_html=True)
+    with col3:
+        st.markdown(render_info_card(
+            "👥", "Lượt khách trung bình",
+            f"{avg_cust_hist:,.0f}", "Mỗi ngày/cửa hàng (01/2013 - 07/2015)"
+        ), unsafe_allow_html=True)
+
