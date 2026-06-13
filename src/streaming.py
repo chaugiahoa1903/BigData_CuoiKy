@@ -61,3 +61,25 @@ ROSSMANN_SCHEMA = StructType([
     StructField("WeekOfYear",    IntegerType(), True),
     StructField("IsWeekend",     IntegerType(), True),
 ])
+
+# Khởi tạo SparkSession
+
+def create_spark_session() -> SparkSession:
+    spark = (
+        SparkSession.builder
+        .appName("Rossmann_Structured_Streaming")
+        .master("local[*]")
+        .config("spark.sql.shuffle.partitions", "4")
+        .config("spark.driver.memory", "2g")
+        .config("spark.sql.adaptive.enabled", "false")
+        # Tăng stack size JVM (-Xss) để tránh StackOverflowError do regex
+        # Đệ quy sau khi Spark don dep checkpoint lúc dùng streaming query.
+        .config("spark.driver.extraJavaOptions", "-Xss16m")
+        .config("spark.executor.extraJavaOptions", "-Xss16m")
+        .getOrCreate()
+    )
+    spark.sparkContext.setLogLevel("WARN")
+    print("SparkSession khởi động thành công")
+    print(f"Spark version : {spark.version}")
+    print(f"Master        : {spark.sparkContext.master}")
+    return spark
