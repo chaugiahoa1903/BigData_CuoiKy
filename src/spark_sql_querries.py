@@ -195,3 +195,26 @@ spark.sql("""
     AND Open = 1
     ORDER BY Store, Date
 """).show(30)
+
+#Query 10: so sánh doanh thu quý 2014 và 2015
+print("\n"+ "="*60)
+print("Query 10: So sánh doanh thu quý 2014 và 2015")
+print("="*60)
+
+spark.sql("""
+    SELECT
+        YEAR(sa.Date)                       AS nam,
+        QUARTER(sa.Date)                    AS quy,
+        s.StoreType,
+        ROUND(SUM(sa.Sales), 2)             AS tong_doanh_thu,
+        ROUND(AVG(sa.Sales), 2)             AS doanh_thu_tb,
+        COUNT(DISTINCT sa.Store)            AS so_cua_hang
+    FROM sales sa
+    JOIN stores s ON sa.Store = s.Store
+    WHERE sa.Open = 1
+      AND sa.Sales > 0
+      AND YEAR(sa.Date) IN (2014, 2015)
+    GROUP BY YEAR(sa.Date), QUARTER(sa.Date), s.StoreType
+    ORDER BY StoreType, nam, quy
+""").show(40)
+
