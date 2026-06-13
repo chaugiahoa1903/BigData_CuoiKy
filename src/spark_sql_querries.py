@@ -172,3 +172,26 @@ spark.sql("""
         END
     ORDER BY doanh_thu_tb DESC
 """).show()
+
+#Query 9: Sử dụng Window Function xem doanh thu tích lũy theo thời gian của top 5 cửa hàng
+spark.sql("""
+    SELECT
+        Store,
+        Date,
+        Sales,
+        SUM(Sales) OVER (
+            PARTITION BY Store
+            ORDER BY Date
+            ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW
+        )                                   AS doanh_thu_tich_luy
+    FROM sales
+    WHERE Store IN (
+        SELECT Store FROM sales
+        WHERE Open = 1 AND Sales > 0
+        GROUP BY Store
+        ORDER BY SUM(Sales) DESC
+        LIMIT 5
+    )
+    AND Open = 1
+    ORDER BY Store, Date
+""").show(30)
