@@ -64,7 +64,7 @@ spark.sql("""
     ORDER BY thang
 """).show(12)
 
-#Query 4: Xếp hạng top 10 cửa hàng có doanh thu trung bình cao nhất
+#Query 4: Ta dùng Window Function: RANK để xếp hạng top 10 cửa hàng có doanh thu trung bình cao nhất
 
 spark.sql("""
     SELECT *
@@ -110,3 +110,26 @@ spark.sql("""
     )
     ORDER BY nam, thang
 """).show(36)
+
+# Query 6: Ta dùng Subquery + Join + Group By để kiểm tra cửa hàng có doanh thu dưới mức trung bình toàn hệ thống
+
+spark.sql("""
+    SELECT
+        sa.Store,
+        s.StoreType,
+        ROUND(AVG(sa.Sales), 2)             AS doanh_thu_tb,
+        ROUND(tb.avg_he_thong, 2)           AS tb_he_thong,
+        ROUND(AVG(sa.Sales) - tb.avg_he_thong, 2) AS chenh_lech
+    FROM sales sa
+    JOIN stores s  ON sa.Store = s.Store
+    JOIN (
+        SELECT AVG(Sales) AS avg_he_thong
+        FROM sales
+        WHERE Open = 1 AND Sales > 0
+    ) tb ON 1 = 1
+    WHERE sa.Open = 1 AND sa.Sales > 0
+    GROUP BY sa.Store, s.StoreType, tb.avg_he_thong
+    HAVING AVG(sa.Sales) < tb.avg_he_thong
+    ORDER BY doanh_thu_tb ASC
+    LIMIT 20
+""").show()
