@@ -79,4 +79,56 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
+#Header: Tên thương hiệu + logo và thông tin người dùng
 
+c1, c2 = st.columns([3, 1])
+logo_path = 'logo.jpg'
+logo_base64 = get_base64_of_bin_file(logo_path)
+
+with c1:
+    st.markdown(f"""
+        <div style='display: flex; align-items: center; gap: 16px; padding-bottom: 15px;'>
+            <div style='background-color: white; padding: 10px; border-radius: 12px;
+                        border: 1px solid #E5E7EB; display: flex; justify-content: center;
+                        align-items: center; box-shadow: 0 4px 6px rgba(0,0,0,0.05);'>
+                <img src="data:image/png;base64,{logo_base64}"
+                     style="width: 48px; height: 48px; object-fit: contain;" alt="Rossmann Logo">
+            </div>
+            <div>
+                <h1 style='color: #E30613; font-size: 28px; margin: 0;
+                           font-weight: 800; letter-spacing: -0.5px;'>ROSSMANN</h1>
+                <p style='color: #6B7280; font-size: 12px; margin: 0;
+                          text-transform: uppercase; letter-spacing: 2px; font-weight: bold;'>
+                    Sales Forecaster
+                </p>
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+with c2:
+    st.markdown("""
+        <div style='display: flex; align-items: center; justify-content: flex-end;
+                    gap: 12px; padding-top: 10px;'>
+            <div style='text-align: right;'>
+                <p style='margin: 0; font-size: 16px; font-weight: 800; color: #000000 !important;
+                          font-family: "Segoe UI", Roboto, Arial, sans-serif; letter-spacing: 0.5px;'>
+                    Người Dùng
+                </p>
+                <p style='margin: 0; font-size: 12px; font-weight: 700; color: #047857 !important;
+                          display: flex; align-items: center; justify-content: flex-end; gap: 5px;
+                          letter-spacing: 0.5px; font-family: "Segoe UI", Roboto, Arial, sans-serif;'>
+                    <span style='height: 8px; width: 8px; background-color: #10B981;
+                                 border-radius: 50%; display: inline-block;
+                                 box-shadow: 0 0 4px #10B981;'></span>
+                    Đang hoạt động
+                </p>
+            </div>
+            <div style='width: 42px; height: 42px; border-radius: 50%; background-color: #F3F4F6;
+                        border: 1px solid #D1D5DB; display: flex; justify-content: center;
+                        align-items: center; font-size: 20px;
+                        box-shadow: 0 2px 4px rgba(0,0,0,0.05);'>
+                ?
+            </div>
+        </div>
+    """, unsafe_allow_html=True)
+
+#
