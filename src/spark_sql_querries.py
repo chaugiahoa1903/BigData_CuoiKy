@@ -64,5 +64,27 @@ spark.sql("""
     ORDER BY thang
 """).show(12)
 
+#Query 4: Xếp hạng top 10 cửa hàng có doanh thu trung bình cao nhất
+
+spark.sql("""
+    SELECT *
+    FROM (
+        SELECT
+            sa.Store,
+            s.StoreType,
+            ROUND(AVG(sa.Sales), 2)         AS doanh_thu_tb,
+            ROUND(SUM(sa.Sales), 2)         AS tong_doanh_thu,
+            RANK() OVER (
+                PARTITION BY s.StoreType
+                ORDER BY AVG(sa.Sales) DESC
+            )                               AS xep_hang
+        FROM sales sa
+        JOIN stores s ON sa.Store = s.Store
+        WHERE sa.Open = 1 AND sa.Sales > 0
+        GROUP BY sa.Store, s.StoreType
+    )
+    WHERE xep_hang <= 3
+    ORDER BY StoreType, xep_hang
+""").show()
 
 
