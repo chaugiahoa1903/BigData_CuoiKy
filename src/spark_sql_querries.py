@@ -218,3 +218,52 @@ spark.sql("""
     ORDER BY StoreType, nam, quy
 """).show(40)
 
+#Query 11: Phân nhóm cửa hàng theo doanh thu trung bình
+print("\n" + "="*60)
+print("QUERY 11: Phân nhóm cửa hàng theo doanh thu (NTILE Quartile)")
+print("="*60)
+
+spark.sql("""
+    SELECT
+        nhom,
+        COUNT(*)                            AS so_cua_hang,
+        ROUND(MIN(doanh_thu_tb), 2)         AS doanh_thu_thap_nhat,
+        ROUND(MAX(doanh_thu_tb), 2)         AS doanh_thu_cao_nhat,
+        ROUND(AVG(doanh_thu_tb), 2)         AS doanh_thu_tb_nhom
+    FROM (
+        SELECT
+            Store,
+            ROUND(AVG(Sales), 2)            AS doanh_thu_tb,
+            NTILE(4) OVER (
+                ORDER BY AVG(Sales) DESC
+            )                               AS nhom
+        FROM sales
+        WHERE Open = 1 AND Sales > 0
+        GROUP BY Store
+    )
+    GROUP BY nhom
+    ORDER BY nhom
+""").show()
+
+#Query 12: Tỷ lệ ngày đóng cửa theo cửa hàng
+print("\n" + "="*60)
+print("QUERY 12: Tỷ lệ ngày đóng cửa theo cửa hàng")
+print("="*60)
+
+spark.sql("""
+    SELECT
+        s.StoreType,
+        COUNT(*)                                AS tong_ngay,
+        SUM(CASE WHEN sa.Open = 0 THEN 1 END)  AS ngay_dong_cua,
+        ROUND(
+            SUM(CASE WHEN sa.Open = 0 THEN 1 END)
+            / COUNT(*) * 100
+        , 2)                                    AS ty_le_dong_cua_pct,
+        ROUND(AVG(
+            CASE WHEN sa.Open = 1 THEN sa.Sales END
+        ), 2)                                   AS doanh_thu_tb_ngay_mo
+    FROM sales sa
+    JOIN stores s ON sa.Store = s.Store
+    GROUP BY s.StoreType
+    ORDER BY ty_le_dong_cua_pct DESC
+""").show()
