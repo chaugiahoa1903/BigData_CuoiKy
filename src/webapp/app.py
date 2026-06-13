@@ -180,3 +180,86 @@ def load_model():
         st.error(f"Không load được MLlib model: {e}")
         return None, None
 
+# Dự báo hàng loạt: pandas -> spark DataFrame -> model.transform -> Lấy cột prediction
+
+def mllib_predict_batch(pipeline_model, spark, X_pandas, features):
+    X_input = X_pandas[features].copy().astype("float64")
+    sdf = spark.createDataFrame(X_input)
+    preds_sdf = pipeline_model.transform(sdf)
+    return preds_sdf.select("prediction").toPandas()["prediction"].values
+
+# Nạp data từ hdfs để tạo các features (lag, rolling, Promo, one-hot)
+
+@st.cache_data(show_spinner="Đang load dữ liệu từ HDFS...")
+def load_and_preprocess_data():
+    try:
+        from pyspark.sql import SparkSession
+        _spark = (SparkSession.builder
+                  .appName("RossmannWebapp")
+                  .config("spark.sql.shuffle.partitions", "4")
+                  .config("spark.driver.memory", "2g")
+                  .getOrCreate())
+        _spark.sparkContext.setLogLevel("ERROR")
+        # Đọc trực tiếp từ HDFS rồi chuyển sang pandas để xử lý phía sau
+        df = (_spark.read
+              .option("header", "true")
+              .option("inferSchema", "true")
+              .csv(CLEANED_CSV_HDFS)
+              .toPandas())
+    except Exception:
+        # Fallback dữ liệu giả lập nếu không kết nối được HDFS
+        dates = pd.date_range("2015-05-01", "2015-07-31")
+        data = []
+        for s in [1, 2, 3]:
+            for d in dates:
+                data.append([s, d, np.random.randint(3000, 8000),
+                             np.random.randint(300, 800),
+                             np.random.choice([0, 1]), 0, 0, 'a', 'a'])
+        df = pd.DataFrame(data, columns=[
+            'Store', 'Date', 'Sales', 'Customers', 'Promo',
+            'StateHoliday', 'SchoolHoliday', 'StoreType', 'Assortment'
+        ])
+
+    df['Date'] = pd.to_datetime(df['Date'])
+    df = df.sort_values(by=['Store', 'Date']).reset_index(drop=True)
+
+    df['Year'] = df['Date'].dt.year
+    df['Month'] = df['Date'].dt.month
+    df['WeekOfYear'] = df['Date'].dt.isocalendar().week.astype(int)
+    df['DayOfWeek'] = df['Date'].dt.dayofweek + 1
+    df['IsWeekend'] = df['DayOfWeek'].isin([6, 7]).astype(int)
+
+    lags = [1, 3, 7, 14]
+    for lag in lags:
+        df[f'Sales_lag_{lag}'] = df.groupby('Store')['Sales'].shift(lag)
+        df[f'Customers_lag_{lag}'] = df.groupby('Store')['Customers'].shift(lag)
+
+    windows = [7, 14]
+    for w in windows:
+        df[f'Sales_roll_mean_{w}'] = df.groupby('Store')['Sales'].transform(
+            lambda x: x.shift(1).rolling(window=w).mean())
+        df[f'Sales_roll_std_{w}'] = df.groupby('Store')['Sales'].transform(
+            lambda x: x.shift(1).rolling(window=w).std())
+        df[f'Sales_roll_max_{w}'] = df.groupby('Store')['Sales'].transform(
+            lambda x: x.shift(1).rolling(window=w).max())
+
+    df['Promo_Weekend'] = df['Promo'] * df['IsWeekend']
+    df['Promo_Month'] = df['Promo'] * df['Month']
+    df['Sales_per_Customer'] = np.where(
+        df['Customers'] == 0, 0, df['Sales'] / df['Customers'])
+
+    df = pd.get_dummies(df, columns=['DayOfWeek'], prefix='DOW')
+    df = df.dropna(
+        subset=[f'Sales_lag_{lag}' for lag in lags] +
+               [f'Sales_roll_mean_{w}' for w in windows]
+    ).reset_index(drop=True)
+
+    categorical_cols = [c for c in ['StateHoliday', 'StoreType', 'Assortment']
+                        if c in df.columns]
+    if categorical_cols:
+        df = pd.get_dummies(df, columns=categorical_cols, drop_first=True)
+    df = df.sort_values(by='Date')
+
+    exclude_cols = ['Date', 'Sales', 'Customers', 'PromoInterval', 'Store']
+    features = [col for col in df.columns if col not in exclude_cols]
+    return df, features
