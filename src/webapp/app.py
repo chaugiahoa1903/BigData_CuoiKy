@@ -632,3 +632,167 @@ with tab_predict:
         else:
             st.info("Hãy thiết lập thông số và nhấn 'Chạy mô hình' để xem kết quả.")
 
+# TAB 3: Thống kê dữ liệu được dự báo ở TAB 2
+with tab_analytics:
+    if st.session_state.get('df_chart_display') is None:
+        st.info("Chưa có dữ liệu dự báo. Vui lòng quay lại tab 'Dự Báo' để chạy trước.")
+    else:
+        df_chart = st.session_state['df_chart_display']
+        df_baseline = st.session_state['baseline_report']
+
+        total_sales = df_chart['Sales'].sum()
+        avg_sales = df_chart['Sales'].mean()
+        total_customers = df_chart['Customers'].sum()
+
+        st.markdown("### Báo cáo Tổng quan (BI Report)")
+
+        kpi1, kpi2, kpi3, kpi4 = st.columns(4)
+        kpi1.metric(label="Tổng Doanh Thu Ước Tính", value=f"€{total_sales:,.0f}")
+        kpi2.metric(label="Doanh Thu Trung Bình/Ngày", value=f"€{avg_sales:,.0f}")
+        kpi3.metric(label="Tổng Lượt Khách", value=f"{total_customers:,.0f}")
+
+        baseline_sales = df_baseline['Sales'].sum()
+        if st.session_state.get('bi_report') is not None and baseline_sales > 0:
+            lift = total_sales - baseline_sales
+            lift_pct = (lift / baseline_sales) * 100
+            kpi4.metric(label="Hiệu Quả Promo (Lift)",
+                        value=f"+{lift_pct:.2f}%", delta=f"+€{lift:,.0f}")
+        else:
+            kpi4.metric(label="Hiệu Quả Promo",
+                        value="N/A", delta="Kịch bản không có Promo")
+
+        st.markdown("---")
+
+        if st.session_state.get('bi_report') is not None:
+            st.markdown("#### So sánh: Kịch bản Promo vs Baseline")
+            fig_comp = go.Figure()
+            fig_comp.add_trace(go.Scatter(
+                x=df_baseline['Date'], y=df_baseline['Sales'],
+                mode='lines', name='Baseline (Không Promo)',
+                line=dict(color='#9CA3AF', width=2, dash='dash')
+            ))
+            fig_comp.add_trace(go.Scatter(
+                x=df_chart['Date'], y=df_chart['Sales'],
+                mode='lines', name='Kịch bản chạy Promo',
+                line=dict(color='#E30613', width=2)
+            ))
+            fig_comp.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=0, r=0, t=30, b=0),
+                xaxis=dict(showgrid=False, tickformat="%d/%m", color="#9CA3AF"),
+                yaxis=dict(showgrid=True, gridcolor='#374151', gridwidth=1,
+                           griddash='dash', color="#9CA3AF"),
+                legend=dict(orientation="h", yanchor="bottom",
+                            y=1.02, xanchor="right", x=1),
+                height=400, hovermode='x unified'
+            )
+            st.plotly_chart(fig_comp, use_container_width=True)
+
+        st.markdown("---")
+        st.markdown("#### Bảng Dữ liệu Dự báo Chi tiết")
+
+        display_df = df_chart[['Date', 'Store', 'Promo', 'Sales', 'Customers']].copy()
+        display_df['Date'] = display_df['Date'].dt.strftime('%Y-%m-%d')
+        display_df['Sales'] = display_df['Sales'].round(2)
+        display_df['Customers'] = display_df['Customers'].round(0)
+        display_df = display_df.rename(columns={
+            'Date': 'Ngày', 'Store': 'Cửa Hàng', 'Promo': 'Có Promo?',
+            'Sales': 'Dự Báo Doanh Thu (€)', 'Customers': 'Ước Tính Lượt Khách'
+        })
+        st.dataframe(display_df, use_container_width=True, hide_index=True)
+
+        st.markdown("---")
+        st.markdown("### Đẩy kết quả dự báo lên HDFS")
+        st.caption("Kết quả dự báo được lưu trên HDFS để phân tích hoặc truy vấn về sau.")
+
+        # ── Tự sinh tên file theo Store ID + khoảng thời gian dự báo ──────
+        _stores = sorted(df_chart["Store"].unique().tolist())
+        if len(_stores) == 1:
+            _store_tag = f"S{int(_stores[0])}"
+        else:
+            _store_tag = f"S{int(_stores[0])}-S{int(_stores[-1])}_{len(_stores)}stores"
+        _d_from = df_chart["Date"].min().strftime("%Y%m%d")
+        _d_to   = df_chart["Date"].max().strftime("%Y%m%d")
+        _auto_filename = f"forecast_{_store_tag}_{_d_from}_{_d_to}.csv"
+
+        st.markdown(
+            f"**Tên file dự báo:** `{_auto_filename}`  \n"
+            f"(Cửa hàng: {_store_tag} · Từ {df_chart['Date'].min():%d/%m/%Y} "
+            f"đến {df_chart['Date'].max():%d/%m/%Y})"
+        )
+
+        with st.expander("Cấu hình HDFS để upload", expanded=False):
+            u_col1, u_col2 = st.columns(2)
+            with u_col1:
+                upload_hdfs_host = st.text_input(
+                    "HDFS Host", value="localhost", key="upload_hdfs_host")
+                upload_hdfs_port = st.text_input(
+                    "HDFS Port", value="9000", key="upload_hdfs_port")
+            with u_col2:
+                upload_hdfs_dir = st.text_input(
+                    "Thư mục đích trên HDFS",
+                    value="/user/project/rossmann/forecasts",
+                    key="upload_hdfs_dir"
+                )
+            upload_hdfs_path = f"{upload_hdfs_dir.rstrip('/')}/{_auto_filename}"
+            st.code(
+                f"hdfs dfs -put -f /tmp/{_auto_filename} "
+                f"hdfs://{upload_hdfs_host}:{upload_hdfs_port}{upload_hdfs_path}"
+            )
+
+        if st.button("Upload kết quả lên HDFS", type="primary",
+                     key="upload_hdfs_btn"):
+            try:
+                import subprocess
+
+                export_df = df_chart[['Date', 'Store', 'Promo',
+                                      'Sales', 'Customers']].copy()
+                export_df['Date'] = export_df['Date'].dt.strftime('%Y-%m-%d')
+                # Dùng thư mục tạm của hệ điều hành (Windows không có /tmp)
+                import tempfile
+                tmp_path = os.path.join(tempfile.gettempdir(), _auto_filename)
+                export_df.to_csv(tmp_path, index=False)
+
+                hdfs_dest = (f"hdfs://{upload_hdfs_host}:"
+                             f"{upload_hdfs_port}{upload_hdfs_path}")
+
+                hdfs_cmd = _find_hdfs_cmd()
+                if hdfs_cmd is None:
+                    st.error("Không tìm thấy lệnh `hdfs`. Kiểm tra Hadoop đã cài "
+                             "và đặt biến môi trường HADOOP_HOME.")
+                    st.stop()
+
+                result = subprocess.run(
+                    [hdfs_cmd, "dfs", "-put", "-f", tmp_path, hdfs_dest],
+                    capture_output=True, text=True, timeout=60
+                )
+
+                if result.returncode == 0:
+                    st.session_state["forecast_on_hdfs"] = True
+                    st.session_state["forecast_hdfs_uri"] = hdfs_dest
+                    st.session_state["forecast_row_count"] = len(export_df)
+                    st.success(f"""
+**Upload thành công!**
+
+- **File:** `{_auto_filename}`
+- **Số dòng:** {len(export_df):,}
+- **HDFS path:** `{hdfs_dest}`
+
+File đã được lưu trên HDFS thành công.
+                    """)
+                else:
+                    st.error(f"HDFS lỗi: {result.stderr}")
+                    st.markdown("""
+**Kiểm tra nhanh:**
+- HDFS đang chạy? -> `start-dfs.sh`
+- Thư mục đích đã tồn tại? -> `hdfs dfs -mkdir -p /user/project/rossmann/`
+- Biến môi trường HADOOP_HOME đã set?
+                    """)
+            except FileNotFoundError:
+                st.error("Không tìm thấy lệnh `hdfs`. Kiểm tra Hadoop đã cài và PATH đã set.")
+            except subprocess.TimeoutExpired:
+                st.error("Timeout khi kết nối HDFS. Kiểm tra HDFS có đang chạy không.")
+            except Exception as e:
+                st.error(f"Lỗi không xác định: {e}")
+
+
