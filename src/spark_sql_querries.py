@@ -19,7 +19,7 @@ df_stores.cache()
 print(f"Sales : {df_sales.count():,} rows x {len(df_sales.columns)} cols")
 print(f"Stores : {df_stores.count():,} rows x {len(df_stores.columns)} cols")
 
-#Querry 1: Ta sử dụng GroupBY, Aggeration và Join để tìm Doanh thu trunh bình theo từng loại cửa hàng
+#Query 1: Ta sử dụng GroupBY, Aggeration và Join để tìm Doanh thu trunh bình theo từng loại cửa hàng
 
 spark.sql("""
     SELECT
@@ -35,7 +35,7 @@ spark.sql("""
     ORDER BY doanh_thu_tb DESC
 """).show()
 
-#Querry 2: Ta sử dụng GroupBY và Aggeration để so sánh doanh thu có Promo và không có Promo
+#Query 2: Ta sử dụng GroupBY và Aggeration để so sánh doanh thu có Promo và không có Promo
 
 spark.sql("""
     SELECT
@@ -49,6 +49,20 @@ spark.sql("""
     GROUP BY Promo
     ORDER BY Promo
 """).show()
+
+#Query 3: Ta sử dụng Time series và GroupBy để doanh thu trung bình theo từng tháng trong năm
+
+spark.sql("""
+    SELECT
+          MONTH(Date) as thang,
+          ROUND(AVG(Sales),2) as doanh_thu_tb,
+          ROUND(SUM(Sales),2) as tong_doanh_thu,
+          ROUND(AVG(Customers),2) AS khach_tb
+    FROM sales
+    WHERE Open = 1 AND Sales > 0
+    GROUP BY MONTH(Date)
+    ORDER BY thang
+""").show(12)
 
 
 
