@@ -371,3 +371,264 @@ with tab_home:
             f"{avg_cust_hist:,.0f}", "Mỗi ngày/cửa hàng (01/2013 - 07/2015)"
         ), unsafe_allow_html=True)
 
+# TAB 2: Dự báo
+
+with tab_predict:
+    left_col, right_col = st.columns([1, 2.5], gap="large")
+
+    with left_col:
+        st.markdown("### Thiết lập dự báo")
+
+        store_list = sorted(df["Store"].unique())
+        store_id = st.selectbox("Chọn ID cửa hàng", store_list)
+
+        start_date = st.date_input("Ngày bắt đầu", value=pd.to_datetime("2015-08-01"))
+        end_date = st.date_input("Ngày kết thúc", value=pd.to_datetime("2015-08-31"))
+
+        store_df = df[df["Store"] == store_id].copy().sort_values("Date")
+
+        st.markdown("---")
+        use_promo = st.toggle("Bật chương trình Promo", value=True)
+
+        days_on, days_off = 0, 0
+        if use_promo:
+            promo_type = st.radio(
+                "Chế độ Promo",
+                ["TỰ ĐỘNG GỢI Ý", "TÙY CHỈNH THỦ CÔNG"],
+                horizontal=True,
+                label_visibility="collapsed"
+            )
+            if promo_type == "TỰ ĐỘNG GỢI Ý":
+                streaks = store_df["Promo"].groupby(
+                    (store_df["Promo"] != store_df["Promo"].shift()).cumsum()
+                ).agg(["first", "count"])
+                try:
+                    days_on = int(streaks[streaks["first"] == 1]["count"].mode().iloc[0])
+                    days_off = int(streaks[streaks["first"] == 0]["count"].mode().iloc[0])
+                except Exception:
+                    days_on, days_off = 5, 9
+                st.info(f"Gợi ý chu kỳ: {days_on} ngày BẬT, {days_off} ngày TẮT.")
+            else:
+                col_p1, col_p2 = st.columns(2)
+                with col_p1:
+                    days_on = st.number_input("Số ngày BẬT", min_value=1, value=5)
+                with col_p2:
+                    days_off = st.number_input("Số ngày TẮT", min_value=1, value=9)
+
+        if st.button("Chạy mô hình", use_container_width=True, type="primary"):
+            if model is None:
+                st.error("Chưa load được MLlib Model, không thể chạy dự báo.")
+            elif start_date > end_date:
+                st.error("Ngày kết thúc phải lớn hơn ngày bắt đầu!")
+            elif len(store_df) < 20:
+                st.warning("Cửa hàng không đủ dữ liệu lịch sử (>20 ngày).")
+            else:
+                with st.spinner("Đang chạy mô hình dự báo (MLlib Batch Prediction)..."):
+                    future_dates = pd.date_range(start=start_date, end=end_date)
+                    hist_df_full = store_df.copy()
+
+                    _tmp = hist_df_full.copy()
+                    _tmp["_dow"] = _tmp["Date"].dt.dayofweek + 1
+                    cust_dow_avg = _tmp.groupby("_dow")["Customers"].mean().to_dict()
+
+                    valid_hist = hist_df_full[hist_df_full["Customers"] > 0].copy()
+                    if not valid_hist.empty:
+                        valid_hist['DayOfWeek'] = valid_hist['Date'].dt.dayofweek + 1
+                        dynamic_basket = valid_hist.groupby(
+                            ['DayOfWeek', 'Promo']
+                        ).apply(
+                            lambda x: x['Sales'].sum() / x['Customers'].sum()
+                        ).to_dict()
+                    else:
+                        dynamic_basket = {}
+
+                    def create_future_df(f_dates, p_pattern):
+                        df_f = pd.DataFrame({"Date": f_dates})
+                        df_f["Store"] = store_id
+                        df_f["Sales"] = np.nan
+                        df_f["Customers"] = np.nan
+                        df_f["Promo"] = p_pattern
+                        df_f["StateHoliday"] = 0
+                        df_f["SchoolHoliday"] = 0
+                        df_f["Year"] = df_f["Date"].dt.year
+                        df_f["Month"] = df_f["Date"].dt.month
+                        df_f["WeekOfYear"] = df_f["Date"].dt.isocalendar().week.astype(int)
+                        _dow_f = df_f["Date"].dt.dayofweek + 1
+                        df_f["IsWeekend"] = _dow_f.isin([6, 7]).astype(int)
+                        df_f["Promo_Weekend"] = df_f["Promo"] * df_f["IsWeekend"]
+                        df_f["Promo_Month"] = df_f["Promo"] * df_f["Month"]
+                        df_f["_DOW_tmp"] = _dow_f
+                        df_f = pd.get_dummies(df_f, columns=["_DOW_tmp"], prefix="DOW")
+                        for d in range(1, 8):
+                            if f"DOW_{d}" not in df_f.columns:
+                                df_f[f"DOW_{d}"] = 0
+                        for col in mllib_features:
+                            if col not in df_f.columns:
+                                df_f[col] = (
+                                    hist_df_full[col].iloc[-1]
+                                    if col in hist_df_full.columns else 0
+                                )
+                        return df_f
+
+                    def run_forecast_scenario(full_df, future_start_idx):
+                        sales_median = hist_df_full["Sales"].median()
+                        for i in range(future_start_idx, len(full_df)):
+                            fill_lag_rolling(full_df, i, cust_dow_avg, hist_df_full)
+                            full_df.loc[i, "Sales"] = sales_median
+
+                        X_future = full_df.loc[future_start_idx:].copy()
+                        X_future = X_future.reindex(columns=mllib_features, fill_value=0)
+                        for col in X_future.columns[X_future.isnull().any()].tolist():
+                            fill_val = (
+                                hist_df_full[col].median()
+                                if col in hist_df_full.columns else 0
+                            )
+                            X_future[col] = X_future[col].fillna(fill_val)
+
+                        all_preds = mllib_predict_batch(
+                            model, spark_session, X_future, mllib_features)
+
+                        for j, i in enumerate(range(future_start_idx, len(full_df))):
+                            pred_sales = max(0, float(all_preds[j]))
+                            current_dow = full_df.loc[i, "Date"].dayofweek + 1
+                            current_promo = full_df.loc[i, "Promo"]
+                            avg_basket = dynamic_basket.get(
+                                (current_dow, current_promo), 10)
+                            pred_cust = int(pred_sales / avg_basket) if pred_sales > 0 else 0
+                            full_df.loc[i, "Sales"] = pred_sales
+                            full_df.loc[i, "Customers"] = pred_cust
+                        return full_df
+
+                    df_future_base = create_future_df(future_dates, 0)
+                    full_df = pd.concat(
+                        [hist_df_full, df_future_base], ignore_index=True)
+                    full_df = full_df.sort_values("Date").reset_index(drop=True)
+                    future_start_idx = full_df[
+                        full_df["Date"] == pd.Timestamp(start_date)].index[0]
+
+                    full_df = run_forecast_scenario(full_df, future_start_idx)
+                    df_future = full_df[
+                        full_df["Date"] >= pd.Timestamp(start_date)].copy()
+
+                    if use_promo:
+                        cycle_pattern = [1] * days_on + [0] * days_off
+                        full_pattern = (
+                            cycle_pattern * (
+                                len(future_dates) // len(cycle_pattern) + 1)
+                        )[:len(future_dates)]
+
+                        df_future_promo = create_future_df(future_dates, full_pattern)
+                        full_df_promo = pd.concat(
+                            [hist_df_full, df_future_promo], ignore_index=True)
+                        full_df_promo = full_df_promo.sort_values("Date").reset_index(drop=True)
+                        full_df_promo = run_forecast_scenario(
+                            full_df_promo, future_start_idx)
+                        df_promo_predicted = full_df_promo[
+                            full_df_promo["Date"] >= pd.Timestamp(start_date)].copy()
+
+                        st.session_state['df_chart_display'] = df_promo_predicted
+                        st.session_state['baseline_report'] = df_future
+                        st.session_state['bi_report'] = df_promo_predicted
+                    else:
+                        st.session_state['df_chart_display'] = df_future
+                        st.session_state['baseline_report'] = df_future
+                        st.session_state['bi_report'] = None
+
+                st.toast("Dự báo thành công!")
+
+        st.markdown('</div>', unsafe_allow_html=True)
+
+    with right_col:
+        st.markdown("### Biểu đồ doanh thu dự báo")
+
+        if st.session_state.get('df_chart_display') is not None:
+            df_baseline = st.session_state['baseline_report']
+            df_promo = st.session_state['bi_report']
+
+            fig = go.Figure()
+            fig.add_trace(go.Scatter(
+                x=df_baseline['Date'], y=df_baseline['Sales'],
+                mode='lines+markers',
+                line=dict(color='#F59E0B', width=2, dash='dash'),
+                marker=dict(size=4),
+                name='Dự báo (Không Promo)'
+            ))
+
+            if df_promo is not None:
+                fig.add_trace(go.Scatter(
+                    x=df_promo['Date'], y=df_promo['Sales'],
+                    fill='tonexty', mode='lines+markers',
+                    line=dict(color='#E30613', width=3),
+                    fillcolor='rgba(227, 6, 19, 0.1)',
+                    marker=dict(size=6, color='white',
+                                line=dict(width=2, color='#E30613')),
+                    name='Dự báo (Có Promo)'
+                ))
+                promo_days = df_promo[df_promo['Promo'] == 1]
+                if not promo_days.empty:
+                    fig.add_trace(go.Scatter(
+                        x=promo_days['Date'], y=promo_days['Sales'],
+                        mode='markers',
+                        marker=dict(size=10, color='#10B981', symbol='circle'),
+                        name='Ngày kích hoạt Promo'
+                    ))
+
+            fig.update_layout(
+                plot_bgcolor='rgba(0,0,0,0)', paper_bgcolor='rgba(0,0,0,0)',
+                margin=dict(l=0, r=0, t=20, b=0),
+                xaxis=dict(showgrid=False, tickformat="%d/%m", color="#6B7280",
+                           tickfont=dict(weight='bold')),
+                yaxis=dict(showgrid=True, gridcolor='#E5E7EB', gridwidth=1,
+                           griddash='dash', color="#6B7280"),
+                showlegend=True,
+                legend=dict(orientation="h", yanchor="bottom",
+                            y=1.02, xanchor="right", x=1),
+                height=350, hovermode='x unified'
+            )
+            st.plotly_chart(fig, use_container_width=True)
+
+            st.markdown("### Phân tích & Đề xuất")
+
+            if df_promo is not None:
+                total_baseline = df_baseline['Sales'].sum()
+                total_promo = df_promo['Sales'].sum()
+                uplift_value = total_promo - total_baseline
+                uplift_pct = (
+                    (uplift_value / total_baseline) * 100
+                    if total_baseline > 0 else 0
+                )
+
+                avg_basket_size = (df_baseline['Sales'].sum()
+                                   / df_baseline['Customers'].sum())
+                CUSTOMERS_PER_STAFF = 100
+
+                temp_df = df_promo.copy()
+                temp_df['Sales_Uplift'] = temp_df['Sales'] - df_baseline['Sales']
+                temp_df['Extra_Customers'] = temp_df['Sales_Uplift'] / avg_basket_size
+                temp_df['Extra_Staff_Needed'] = np.ceil(
+                    temp_df['Extra_Customers'] / CUSTOMERS_PER_STAFF
+                ).clip(lower=0)
+
+                promo_days_df = temp_df[temp_df['Promo'] == 1]
+                avg_extra_staff = (
+                    int(np.ceil(promo_days_df['Extra_Staff_Needed'].mean()))
+                    if not promo_days_df.empty else 0
+                )
+
+                st.success(f"""
+**BÁO CÁO KINH DOANH: HIỆU QUẢ PROMO & NHÂN SỰ**
+
+- **Tổng Sales dự kiến (Không Promo):** {total_baseline:,.0f} €
+- **Tổng Sales dự kiến (Có Promo):** {total_promo:,.0f} €
+
+---
+
+- **Doanh thu tăng thêm (Uplift):** +{uplift_value:,.0f} € (+{uplift_pct:.2f}%)
+
+- **Khuyến nghị Nhân sự:** Chỉ tính riêng những ngày BẬT KHUYẾN MÃI, cửa hàng cần bổ sung trung bình **{avg_extra_staff} nhân sự part-time/ngày**.
+                """)
+            else:
+                st.info("Cửa hàng giữ nguyên chiến lược hiện tại (Không Promo).")
+        else:
+            st.info("Hãy thiết lập thông số và nhấn 'Chạy mô hình' để xem kết quả.")
+
