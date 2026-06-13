@@ -40,3 +40,24 @@ YELLOW = "\033[93m"
 CYAN   = "\033[96m"
 BOLD   = "\033[1m"
 RESET  = "\033[0m"
+
+# Khai báo Schema
+
+ROSSMANN_SCHEMA = StructType([
+    StructField("Store",         IntegerType(), True),
+    StructField("DayOfWeek",     IntegerType(), True),
+    StructField("Date",          StringType(),  True),  # đọc string, parse sau
+    StructField("Sales",         FloatType(),   True),
+    StructField("Customers",     IntegerType(), True),
+    StructField("Open",          IntegerType(), True),
+    StructField("Promo",         IntegerType(), True),
+    StructField("StateHoliday",  StringType(),  True),
+    StructField("SchoolHoliday", IntegerType(), True),
+    StructField("StoreType",     StringType(),  True),
+    StructField("Assortment",    StringType(),  True),
+    StructField("CompetitionDistance", FloatType(), True),
+    StructField("Year",          IntegerType(), True),
+    StructField("Month",         IntegerType(), True),
+    StructField("WeekOfYear",    IntegerType(), True),
+    StructField("IsWeekend",     IntegerType(), True),
+])
