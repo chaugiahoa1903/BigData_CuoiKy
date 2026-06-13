@@ -159,3 +159,24 @@ def _find_hdfs_cmd():
                 return cand
     return None
 
+# Khởi động SparkSession và load model GBT đã train vào từ HDFS.
+# @st.cache_resource: chỉ chạy 1 lần, giữ lại để rerun cho các lần sau.
+
+@st.cache_resource(show_spinner="Đang khởi động Spark & load MLlib model...")
+def load_model():
+    try:
+        from pyspark.ml import PipelineModel
+        from pyspark.sql import SparkSession
+
+        spark = (SparkSession.builder
+                 .appName("RossmannWebapp")
+                 .config("spark.sql.shuffle.partitions", "4")
+                 .config("spark.driver.memory", "2g")
+                 .getOrCreate())
+        spark.sparkContext.setLogLevel("ERROR")
+        model = PipelineModel.load(MLLIB_MODEL_PATH)
+        return model, spark
+    except Exception as e:
+        st.error(f"Không load được MLlib model: {e}")
+        return None, None
+
