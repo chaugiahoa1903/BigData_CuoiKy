@@ -135,10 +135,6 @@ spark.sql("""
 """).show()
 
 #Query 7: Sử dụng Group By + Aggregation để tìm doanh thu theo ngày trong tuần — ngày nào bán được nhiều nhất
-print("\n" + "="*60)
-print("QUERY 7: Doanh thu theo ngày trong tuần")
-print("="*60)
-
 spark.sql("""
     SELECT
         DayOfWeek,
@@ -149,4 +145,30 @@ spark.sql("""
     WHERE Open = 1 AND Sales > 0
     GROUP BY DayOfWeek
     ORDER BY DayOfWeek
+""").show()
+
+#Query 8: Sử dụng Join + Group By + CASE WHEN xem ảnh hưởng của khoảng cách đối thủ cạnh tranh đến doanh thu
+
+spark.sql("""
+    SELECT
+        CASE
+            WHEN s.CompetitionDistance < 500  THEN 'Rat gan  (<500m)'
+            WHEN s.CompetitionDistance < 1000 THEN 'Gan      (500m-1km)'
+            WHEN s.CompetitionDistance < 5000 THEN 'Vua      (1km-5km)'
+            ELSE                                   'Xa       (>5km)'
+        END                                     AS nhom_khoang_cach,
+        COUNT(DISTINCT sa.Store)                AS so_cua_hang,
+        ROUND(AVG(sa.Sales), 2)                 AS doanh_thu_tb,
+        ROUND(AVG(sa.Customers), 2)             AS khach_tb
+    FROM sales sa
+    JOIN stores s ON sa.Store = s.Store
+    WHERE sa.Open = 1 AND sa.Sales > 0
+    GROUP BY
+        CASE
+            WHEN s.CompetitionDistance < 500  THEN 'Rat gan  (<500m)'
+            WHEN s.CompetitionDistance < 1000 THEN 'Gan      (500m-1km)'
+            WHEN s.CompetitionDistance < 5000 THEN 'Vua      (1km-5km)'
+            ELSE                                   'Xa       (>5km)'
+        END
+    ORDER BY doanh_thu_tb DESC
 """).show()
