@@ -35,3 +35,20 @@ spark.sql("""
     ORDER BY doanh_thu_tb DESC
 """).show()
 
+#Querry 2: Ta sử dụng GroupBY và Aggeration để so sánh doanh thu có Promo và không có Promo
+
+spark.sql("""
+    SELECT
+          Promo,
+          COUNT(*) AS so_ngay_ghi_nhan,
+          ROUND(AVG(Sales),2) AS doanh_thu_tb,
+          ROUND(AVG(Customers),2) as khach_tb,
+          ROUND(AVG(Sales/Customers),2) as doanh_thu_per_khach
+    FROM sales
+    WHERE Open = 1 AND Sales > 0 AND Customers > 0
+    GROUP BY Promo
+    ORDER BY Promo
+""").show()
+
+
+
