@@ -263,3 +263,53 @@ def load_and_preprocess_data():
     exclude_cols = ['Date', 'Sales', 'Customers', 'PromoInterval', 'Store']
     features = [col for col in df.columns if col not in exclude_cols]
     return df, features
+
+# Điền lag/rolling cho 1 ngày trong tương lai dựa trên các ngày đã dự báo
+
+def fill_lag_rolling(df_ref, i, cust_dow_avg, hist_df_full):
+    for lag in [1, 3, 7, 14]:
+        idx = i - lag
+        df_ref.loc[i, f"Sales_lag_{lag}"] = (
+            df_ref.loc[idx, "Sales"] if idx >= 0 else np.nan)
+        val = df_ref.loc[idx, "Customers"] if idx >= 0 else np.nan
+        if pd.isna(val):
+            val = cust_dow_avg.get(df_ref.loc[i, "Date"].dayofweek + 1, 0)
+        df_ref.loc[i, f"Customers_lag_{lag}"] = val
+ 
+    for w in [7, 14]:
+        history = df_ref.loc[max(0, i - w): i - 1, "Sales"].dropna()
+        df_ref.loc[i, f"Sales_roll_mean_{w}"] = (
+            history.mean() if len(history) > 0 else np.nan)
+        df_ref.loc[i, f"Sales_roll_std_{w}"] = (
+            history.std() if len(history) > 1 else 0.0)
+        df_ref.loc[i, f"Sales_roll_max_{w}"] = (
+            history.max() if len(history) > 0 else np.nan)
+ 
+    s_lag1 = df_ref.loc[i, "Sales_lag_1"]
+    c_lag1 = df_ref.loc[i, "Customers_lag_1"]
+    df_ref.loc[i, "Sales_per_Customer"] = (
+        s_lag1 / c_lag1
+        if (not pd.isna(s_lag1) and not pd.isna(c_lag1) and c_lag1 != 0)
+        else hist_df_full["Sales_per_Customer"].median()
+    )
+
+# Nạp data và model khi mở app
+
+model, spark_session = load_model()
+df, features = load_and_preprocess_data()
+
+try:
+    # Đọc features.json trực tiếp từ HDFS (qua SparkContext.textFile)
+    _features_str = "\n".join(
+        spark_session.sparkContext.textFile(FEATURES_JSON_HDFS).collect())
+    mllib_features = json.loads(_features_str)
+except Exception:
+    mllib_features = features
+
+for key in ['bi_report', 'baseline_report', 'df_chart_display']:
+    if key not in st.session_state:
+        st.session_state[key] = None
+
+tab_home, tab_predict, tab_analytics = st.tabs([
+    "TRANG CHỦ", "DỰ BÁO", "THỐNG KÊ"
+])
