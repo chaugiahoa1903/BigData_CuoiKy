@@ -1,4 +1,4 @@
-# Nhóm 5 – Rossmann Store Sales Forecasting (Big Data)
+# Nhóm 7 – Ứng dụng BigData vào bài toán dự đoán doanh thu của Rossmann
 
 ## Phân công
 | File | Thành viên | Nhiệm vụ |
