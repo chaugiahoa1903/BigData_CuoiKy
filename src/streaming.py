@@ -257,6 +257,12 @@ def run_streaming(spark: SparkSession, stop_event: threading.Event):
                                 / F.col("BaseMean") * 100, 1))
         )
 
+        (
+        scored.select("Store", "Date", "Sales", "BaseMean", "ZScore", "DeviationPct")
+        .write.mode("append")
+        .option("header", "true")
+        .csv(STREAM_OUTPUT_DIR))
+
         anomalies = scored.filter(F.abs(F.col("ZScore")) > Z_THRESHOLD).cache()
         n_anom = anomalies.count()
 
@@ -370,6 +376,12 @@ def main():
         if hadoop_fs.exists(p): hadoop_fs.delete(p, True)
         hadoop_fs.mkdirs(p)
         print(f"Đã tạo thư mục input: {STREAM_INPUT_DIR}")
+
+        # Xoá và tạo lại stream_input
+        p = HPath(STREAM_OUTPUT_DIR)
+        if hadoop_fs.exists(p): hadoop_fs.delete(p, True)
+        hadoop_fs.mkdirs(p)
+        print(f"Đã tạo thư mục output: {STREAM_OUTPUT_DIR}")
 
         # Xoá checkpoint cũ để tránh conflict khi chạy lại
         p = HPath(CHECKPOINT_DIR)
