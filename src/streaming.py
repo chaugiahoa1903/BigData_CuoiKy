@@ -348,7 +348,7 @@ def run_streaming(spark: SparkSession, stop_event: threading.Event):
 def main():
     print()
     print("ROSSMANN REAL-TIME SALES STREAMING PIPELINE")
-    print("Big Data | Nhóm 5 | UEH")
+    print("Big Data | NHÓM 7 | UEH")
     print()
     print(f"HDFS Base      : {HDFS_BASE}")
     print(f"Source CSV     : {SOURCE_CSV}")
