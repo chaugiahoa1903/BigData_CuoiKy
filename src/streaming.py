@@ -336,3 +336,149 @@ def run_streaming(spark: SparkSession, stop_event: threading.Event):
     print(f"Tổng kết: {stats['batches']} batch | "
           f"{stats['total']:,} bản ghi | "
           f"{stats['anomaly']} bất thường được phát hiện.")
+    
+# Khởi tạo hàm Main
+    
+def main():
+    print("=" * 70)
+    print("ROSSMANN REAL-TIME SALES STREAMING PIPELINE")
+    print("Big Data | Nhóm 5 | UEH")
+    print("=" * 70)
+    print(f"HDFS Base      : {HDFS_BASE}")
+    print(f"Source CSV     : {SOURCE_CSV}")
+    print(f"Stream Input   : {STREAM_INPUT_DIR}")
+    print(f"Anomaly Out    : {ANOMALY_DIR}")
+    print(f"Z-threshold    : {Z_THRESHOLD} (3-sigma)")
+    print(f"Rows/batch     : {ROWS_PER_BATCH}")
+    print(f"Producer delay : {PRODUCER_INTERVAL}s")
+    print(f"Trigger        : {TRIGGER_INTERVAL}")
+    print(f"Max batches    : {MAX_BATCHES}")
+    print("=" * 70 + "\n")
+
+    spark = create_spark_session()
+
+    # Khởi tạo HDFS directories và xoá checkpoint cũ
+    try:
+        hadoop_fs = spark._jvm.org.apache.hadoop.fs.FileSystem.get(
+            spark._jvm.java.net.URI.create("hdfs://localhost:9000"),
+            spark._jsc.hadoopConfiguration()
+        )
+        HPath = spark._jvm.org.apache.hadoop.fs.Path
+
+        # Xoá và tạo lại stream_input
+        p = HPath(STREAM_INPUT_DIR)
+        if hadoop_fs.exists(p): hadoop_fs.delete(p, True)
+        hadoop_fs.mkdirs(p)
+        print(f"Đã tạo thư mục input: {STREAM_INPUT_DIR}")
+
+        # Xoá checkpoint cũ để tránh conflict khi chạy lại
+        p = HPath(CHECKPOINT_DIR)
+        if hadoop_fs.exists(p):
+            hadoop_fs.delete(p, True)
+            print(f"Đã xoá checkpoint cũ: {CHECKPOINT_DIR}")
+
+        # Xoá và tạo lại stream_anomalies, nơi ghi cảnh báo bất thường
+        p = HPath(ANOMALY_DIR)
+        if hadoop_fs.exists(p): hadoop_fs.delete(p, True)
+        hadoop_fs.mkdirs(p)
+        print(f"Đã tạo thư mục anomalies: {ANOMALY_DIR}\n")
+
+    except Exception as e:
+        print(f"Không thể khởi tạo HDFS: {e}")
+        print("Chạy thủ công trong PowerShell:")
+        print("hadoop fs -rm -r /user/project/rossmann/stream_input")
+        print("hadoop fs -rm -r /user/project/rossmann/stream_checkpoint")
+        print("hadoop fs -mkdir /user/project/rossmann/stream_input\n")
+
+
+    stop_event = threading.Event()
+
+    # Khởi động Streaming trước
+    streaming_thread = threading.Thread(
+        target=run_streaming,
+        args=(spark, stop_event),
+        daemon=True,
+        name="StreamingThread"
+    )
+    streaming_thread.start()
+
+    # Đợi streaming khởi động xong
+    time.sleep(8)
+
+    # Khởi động Producer trong thread riêng
+    producer_thread = threading.Thread(
+        target=run_producer,
+        args=(spark, stop_event),
+        name="ProducerThread"
+    )
+    producer_thread.start()
+
+    # Chờ producer xong
+    producer_thread.join()
+
+    # Đợi thêm 2 trigger để Spark xử lý hết batch cuối
+    print(f"\nCho them {int(TRIGGER_INTERVAL.split()[0]) * 2}s de Spark xu ly batch cuoi...")
+    time.sleep(int(TRIGGER_INTERVAL.split()[0]) * 2)
+
+    stop_event.set()
+    streaming_thread.join(timeout=15)
+
+    # Tổng kết các cảnh báo bất thường từ HDFS
+    print()
+    print("KẾT QUẢ CUỐI — CÁC CỬA HÀNG CÓ DOANH THU BẤT THƯỜNG")
+    print()
+    try:
+        anomaly_df = (
+            spark.read
+            .option("header", "true")
+            .option("inferSchema", "true")
+            .csv(ANOMALY_DIR)
+        )
+        n_anom = anomaly_df.count()
+
+        if n_anom == 0:
+            print("\n  Không phát hiện cửa hàng nào bất thường trong kỳ stream này.")
+        else:
+            n_drop = anomaly_df.filter(F.col("ZScore") < 0).count()
+            n_rise = anomaly_df.filter(F.col("ZScore") > 0).count()
+            print(f"\n{BOLD}Tong so canh bao bat thuong : {n_anom}{RESET}")
+            print(f"  {RED}Sut giam bat thuong : {n_drop}{RESET}")
+            print(f"  {GREEN}Tang dot bien       : {n_rise}{RESET}")
+            print()
+
+            # 15 bất thường nghiêm trọng nhất (|z-score| lớn nhất)
+            print("TOP 15 BAT THUONG NGHIEM TRONG NHAT (|z-score| cao nhat):")
+            print("─" * 78)
+            print(f"{BOLD}{'Loai':<10}{'Store':>6}{'Date':>14}{'Sales':>10}"
+                  f"{'TB_LichSu':>12}{'Lech%':>9}{'ZScore':>9}{RESET}")
+            print("─" * 78)
+            top = (anomaly_df
+                   .withColumn("absZ", F.abs(F.col("ZScore")))
+                   .orderBy(F.col("absZ").desc())
+                   .drop("absZ")
+                   .limit(15)
+                   .collect())
+            for r in top:
+                if r["ZScore"] < 0:
+                    color, tag = RED, "SUT GIAM"
+                else:
+                    color, tag = GREEN, "TANG VOT"
+                print(f"{color}{tag:<10}{r['Store']:>6}{str(r['Date']):>14}"
+                      f"{r['Sales']:>10.0f}{r['BaseMean']:>12.0f}"
+                      f"{r['DeviationPct']:>+8.1f}%{r['ZScore']:>+9.2f}{RESET}")
+            print("─" * 78)
+    except Exception as e:
+        print(f"Không đọc được cảnh báo: {e}")
+        print("(Có thể không có bất thường nào trong kỳ stream — folder rỗng.)")
+        print("Kiểm tra HDFS tại:", ANOMALY_DIR)
+
+    print("\n" + "=" * 70)
+    print("PIPELINE HOÀN THÀNH")
+    print(f"Cảnh báo lưu tại HDFS: {ANOMALY_DIR}")
+    print("=" * 70)
+
+    spark.stop()
+
+
+if __name__ == "__main__":
+    main()
