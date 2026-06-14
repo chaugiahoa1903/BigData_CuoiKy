@@ -202,7 +202,11 @@ def run_streaming(spark: SparkSession, stop_event: threading.Event):
             .option("header", "true")
             .option("inferSchema", "true")
             .csv(SOURCE_CSV)
-            .filter((F.col("Sales") > 0) & (F.col("Open") == 1)))
+            .filter(
+                (F.col("Sales") > 0) &
+                (F.col("Open") == 1) &
+                (F.col("Year") <= 2014)          # Dùng dữ liệu 2013-2014 để tính baseline
+            ))
 
     baseline_df = (
         hist.groupBy("Store")
