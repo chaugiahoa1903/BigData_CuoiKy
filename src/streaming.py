@@ -29,7 +29,7 @@ MAX_BATCHES      = 15       # Dừng sau bao nhiêu batch
 # z = (Sales - mean_lich_su) / std_lich_su của chính cửa hàng đó.
 # |z| > 3  ->  chỉ xấp xỉ 0.3% dữ liệu bình thường bị rơi ra ngoài (quy tac 68-95-99.7)
 # -> giá trị nằm ngoài khoảng này được xem là bất thường.
-Z_THRESHOLD      = 2.5
+Z_THRESHOLD      = 3.0
 
 # Mau ANSI cho terminal (do = sut giam, xanh la = tang vot)
 import os as _os
@@ -179,3 +179,160 @@ def run_producer(spark: SparkSession, stop_event: threading.Event):
  
     print("\nProducer: Đã gửi xong tất cả các batch.")
     stop_event.set()
+
+# Streaming query giúp giải quyết bài toán anomaly detection
+
+def run_streaming(spark: SparkSession, stop_event: threading.Event):
+    """
+    Spark Structured Streaming PHÁT HIỆN BẤT THƯỜNG real-time.
+
+    Ý tưởng triển khai:
+      1. Chúng ta sẽ tính BASELINE từ dữ liệu lịch sử: mỗi cửa hàng có 
+      doanh thu trung bình (mean) và độ lệch chuẩn (std) riêng. Cửa hàng lớn mean cao, cửa hàng 
+      nhỏ mean thấp — baseline cá nhân hoá cho TỪNG cửa hàng.
+      2. Mỗi micro-batch data đến, tính z-score cho từng bản ghi:
+      z = (Sales_hôm_nay - mean_cửa_hàng) / std_cửa_hàng
+      3. |z| > 3    BẤT THƯỜNG (quy tắc 3-sigma). Phân biệt:
+      z < -3    SỤT GIẢM bất thường (vd: mất điện, hết hàng, máy POS lỗi)
+      z > +3    TĂNG đột biến  (vd: sự kiện, khuyến mãi ngoài kế hoạch)
+    """
+    # BƯỚC 1: Tính baseline từ lịch sử
+    print("\nĐang tính BASELINE doanh thu mỗi cửa hàng từ lịch sử...")
+    hist = (spark.read
+            .option("header", "true")
+            .option("inferSchema", "true")
+            .csv(SOURCE_CSV)
+            .filter((F.col("Sales") > 0) & (F.col("Open") == 1)))
+
+    baseline_df = (
+        hist.groupBy("Store")
+        .agg(
+            F.round(F.avg("Sales"), 2).alias("BaseMean"),
+            F.round(F.stddev("Sales"), 2).alias("BaseStd"),
+            F.count("*").alias("BaseCount"),
+        )
+        # Bỏ cửa hàng không đủ dữ liệu để tính std đáng tin (std null hoặc = 0)
+        .filter((F.col("BaseStd").isNotNull()) & (F.col("BaseStd") > 0))
+        .cache()
+    )
+    n_base = baseline_df.count()
+    print(f"Đã tính baseline cho {n_base:,} cửa hàng")
+    print(f"Ngưỡng phát hiện: |z-score| > {Z_THRESHOLD} (quy tắc 3-sigma)\n")
+
+    # BƯỚC 2: readStream từ HDFS
+    print("Streaming: Khởi động readStream...")
+    print(f"Đọc từ      : {STREAM_INPUT_DIR}/")
+    print(f"Ghi cảnh báo: {ANOMALY_DIR}/")
+    print(f"Trigger     : mỗi {TRIGGER_INTERVAL}\n")
+
+    stream_df = (
+        spark.readStream
+        .schema(ROSSMANN_SCHEMA)
+        .option("header", "true")
+        .option("maxFilesPerTrigger", 1)
+        .csv(STREAM_INPUT_DIR)
+        .filter((F.col("Sales") > 0) & (F.col("Open") == 1))
+    )
+
+    # Bộ đếm tổng (mutable để closure foreachBatch cập nhật được)
+    stats = {"total": 0, "anomaly": 0, "batches": 0}
+
+    # BƯỚC 3: Thực hiện xử lý từng micro-batch bằng foreachBatch
+    def process_batch(batch_df, batch_id):
+        if batch_df.rdd.isEmpty():
+            return
+        batch_df = batch_df.cache()
+        n_records = batch_df.count()
+
+        # Join với baseline (broadcast vì baseline nhỏ ~1115 dòng)
+        joined = batch_df.join(F.broadcast(baseline_df), on="Store", how="inner")
+
+        scored = (
+            joined
+            .withColumn("ZScore",
+                        F.round((F.col("Sales") - F.col("BaseMean"))
+                                / F.col("BaseStd"), 2))
+            .withColumn("DeviationPct",
+                        F.round((F.col("Sales") - F.col("BaseMean"))
+                                / F.col("BaseMean") * 100, 1))
+        )
+
+        anomalies = scored.filter(F.abs(F.col("ZScore")) > Z_THRESHOLD).cache()
+        n_anom = anomalies.count()
+
+        stats["batches"] += 1
+        stats["total"]   += n_records
+        stats["anomaly"] += n_anom
+
+        ts = time.strftime("%H:%M:%S")
+        # Phân cách giữa các micro-batch cho dễ đọc
+        print()
+        print(f"{BOLD}{CYAN}[{ts}] Micro-batch #{stats['batches']:02d}{RESET}  "
+              f"|  {n_records} ban ghi  "
+              f"|  {n_anom} bat thuong")
+
+        # In chi tiết các cảnh báo
+        if n_anom > 0:
+            rows = (anomalies
+                    .orderBy(F.abs(F.col("ZScore")).desc())
+                    .limit(15)
+                    .collect())
+            for r in rows:
+                if r["ZScore"] < 0:
+                    color, tag = RED, "SUT GIAM"     # do = sut giam
+                else:
+                    color, tag = GREEN, "TANG VOT"   # xanh la = tang vot
+                print(f"{color}    [{tag}]  Store {r['Store']:>4}  |  {r['Date']}  |  "
+                      f"Sales = {r['Sales']:>7.0f}   "
+                      f"(TB lich su {r['BaseMean']:>7.0f}, "
+                      f"lech {r['DeviationPct']:>+6.1f}%, z = {r['ZScore']:>+5.2f}){RESET}")
+
+            # Ghi cảnh báo ra HDFS (append từng batch vào cùng folder)
+            try:
+                (anomalies
+                 .select("Store", "Date", "Sales", "BaseMean", "BaseStd",
+                         "DeviationPct", "ZScore")
+                 .write.mode("append")
+                 .option("header", "true")
+                 .csv(ANOMALY_DIR))
+            except Exception as e:
+                print(f"Không ghi được cảnh báo ra HDFS: {e}")
+            anomalies.unpersist()
+
+        batch_df.unpersist()
+
+    query = (
+        stream_df.writeStream
+        .foreachBatch(process_batch)
+        .trigger(processingTime=TRIGGER_INTERVAL)
+        .option("checkpointLocation", f"{CHECKPOINT_DIR}/anomaly")
+        .queryName("rossmann_anomaly_detection")
+        .start()
+    )
+
+    print("Streaming anomaly detection đang chạy. Chờ producer gửi data...\n")
+    print("─" * 70)
+
+    # Chờ đến khi producer xong
+    while not stop_event.is_set():
+        time.sleep(2)
+
+    # Dừng gracefully: đợi batch hiện tại xử lý xong rồi mới stop,
+    # Tránh interrupt giữa chừng.
+    print("\nĐang dừng streaming query...")
+    try:
+        query.processAllAvailable()   # Chờ xử lý hết data đang chờ
+    except Exception:
+        pass
+    try:
+        query.stop()
+        query.awaitTermination(timeout=20)
+    except Exception:
+        pass
+
+    # Lưu tổng kết vào session để main đọc lại
+    stop_event.stats = stats
+    print("Streaming dừng thành công.")
+    print(f"Tổng kết: {stats['batches']} batch | "
+          f"{stats['total']:,} bản ghi | "
+          f"{stats['anomaly']} bất thường được phát hiện.")
