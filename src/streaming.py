@@ -220,7 +220,7 @@ def run_streaming(spark: SparkSession, stop_event: threading.Event):
         .cache()
     )
     n_base = baseline_df.count()
-    print(f"Đã tính baseline cho {n_base:,} cửa hàng")
+    print(f"Đã tính baseline cho {n_base:,} cửa hàng (từ dữ liệu 2013–2014)")
     print(f"Ngưỡng phát hiện: |z-score| > {Z_THRESHOLD} (quy tắc 3-sigma)\n")
 
     # BƯỚC 2: readStream từ HDFS
