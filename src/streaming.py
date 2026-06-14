@@ -139,6 +139,7 @@ def run_producer(spark: SparkSession, stop_event: threading.Event):
             .option("inferSchema", "true")
             .csv(SOURCE_CSV)
         )
+        df_full = df_full.filter(F.year(F.to_date(F.col("Date"))) == 2015)
         total_rows = df_full.count()
         print(f"Tổng số dòng dataset: {total_rows:,}")
     except Exception as e:
@@ -205,7 +206,7 @@ def run_streaming(spark: SparkSession, stop_event: threading.Event):
             .filter(
                 (F.col("Sales") > 0) &
                 (F.col("Open") == 1) &
-                (F.col("Year") <= 2014)          # Dùng dữ liệu 2013-2014 để tính baseline
+                (F.year(F.to_date(F.col("Date"))) <= 2014)          # Dùng dữ liệu 2013-2014 để tính baseline
             ))
 
     baseline_df = (
