@@ -340,10 +340,10 @@ def run_streaming(spark: SparkSession, stop_event: threading.Event):
 # Khởi tạo hàm Main
     
 def main():
-    print("=" * 70)
+    print()
     print("ROSSMANN REAL-TIME SALES STREAMING PIPELINE")
     print("Big Data | Nhóm 5 | UEH")
-    print("=" * 70)
+    print()
     print(f"HDFS Base      : {HDFS_BASE}")
     print(f"Source CSV     : {SOURCE_CSV}")
     print(f"Stream Input   : {STREAM_INPUT_DIR}")
@@ -353,7 +353,7 @@ def main():
     print(f"Producer delay : {PRODUCER_INTERVAL}s")
     print(f"Trigger        : {TRIGGER_INTERVAL}")
     print(f"Max batches    : {MAX_BATCHES}")
-    print("=" * 70 + "\n")
+    print()
 
     spark = create_spark_session()
 
@@ -472,10 +472,10 @@ def main():
         print("(Có thể không có bất thường nào trong kỳ stream — folder rỗng.)")
         print("Kiểm tra HDFS tại:", ANOMALY_DIR)
 
-    print("\n" + "=" * 70)
+    print()
     print("PIPELINE HOÀN THÀNH")
-    print(f"Cảnh báo lưu tại HDFS: {ANOMALY_DIR}")
-    print("=" * 70)
+    print(f"Được lưu tại HDFS: {ANOMALY_DIR}")
+    print()
 
     spark.stop()
 
