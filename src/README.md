@@ -10,7 +10,7 @@
 | `utils/` | Cả nhóm | Shared helpers |
 
 ## Dataset
-Đặt các file sau vào thư mục `data/` trước khi chạy:
+Các file được lưu trữ trên HDFS trước khi chạy, ban đầu chỉ cần sale.csv và store.csv, ta chạy lần lượt các file src code 1->3:
 
 | File | Link |
 |------|------|
