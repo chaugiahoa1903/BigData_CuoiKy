@@ -24,6 +24,7 @@ spark = (
 spark.sparkContext.setLogLevel("WARN")
 HDFS_ROOT = "hdfs://localhost:9000/user/project/rossmann"
 
+#Hàm bổ trợ lưu DataFrame -> CSV rồi push lên HDFS
 def save_single_csv(sdf, hdfs_path):
     tmp = hdfs_path + "__tmp"
     (sdf.coalesce(1)
@@ -36,7 +37,7 @@ def save_single_csv(sdf, hdfs_path):
     
    
     uri = spark._jvm.java.net.URI(tmp)
-    fs = hadoop.fs.FileSystem.get(uri, conf)  # ← dòng fix
+    fs = hadoop.fs.FileSystem.get(uri, conf)
     
     Path = hadoop.fs.Path
     part = None
