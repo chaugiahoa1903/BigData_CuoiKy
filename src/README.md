@@ -6,8 +6,7 @@
 | `01_data_preparation_and_eda.py` | Tuấn Anh | Load, clean, join, EDA |
 | `02_feature_engineering.py` | Hoàng Khang | Tạo features, encoding, dropna |
 | `03_mllib_training.py` | Minh Khôi | Train model MLlib, đánh giá |
-| `webapp/app.py` + `webapp/main.py` | Gia Hòa | Load model, Streamlit Web App & Spark Structured Streaming |
-| `utils/` | Cả nhóm | Shared helpers |
+| `webapp/app.py` + `streaming.py` | Gia Hòa | Load model, Streamlit Web App & Spark Structured Streaming |
 
 ## Dataset
 Các file được lưu trữ trên HDFS trước khi chạy, ban đầu chỉ cần sale.csv và store.csv, ta chạy lần lượt các file src code 1->3:
