@@ -1,6 +1,6 @@
 # Nhóm 7 – Ứng dụng BigData vào bài toán dự đoán doanh thu của Rossmann
 
-#Link Drive - [Link](https://drive.google.com/drive/u/2/folders/1KsbbDGlauA9IOlVt4zRYgpasA8LQ1Bz9)
+# Link Drive - [Link](https://drive.google.com/drive/u/2/folders/1KsbbDGlauA9IOlVt4zRYgpasA8LQ1Bz9)
 
 ## Phân công
 | File | Thành viên | Nhiệm vụ |
