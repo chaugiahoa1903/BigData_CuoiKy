@@ -53,7 +53,7 @@ def save_single_csv(sdf, hdfs_path):
     fs.delete(Path(tmp), True)
     print("Da ghi:", hdfs_path)
 
-
+#Hàm bổ trợ lưu object -> JSON rồi push lên HDFS
 def save_json_hdfs(obj, hdfs_path):
     content = json.dumps(obj, ensure_ascii=False, indent=2)
     hadoop = spark._jvm.org.apache.hadoop
@@ -63,7 +63,7 @@ def save_json_hdfs(obj, hdfs_path):
     out.close()
     print("Da ghi:", hdfs_path)
 
-
+#Bổ trợ One-hot Encoding
 def add_dummies(df, col, drop_first=True):
     cats = [r[0] for r in df.select(col).distinct().collect() if r[0] is not None]
     cats = sorted(cats, key=lambda x: str(x))
@@ -84,7 +84,7 @@ df = (df
       .withColumn("Year",       F.year("Date"))
       .withColumn("Month",      F.month("Date"))
       .withColumn("WeekOfYear", F.weekofyear("Date"))
-      .withColumn("DayOfWeek", ((F.dayofweek(F.col("Date")) + 5) % 7 + 1).cast("int")))  # Mon=1..Sun=7
+      .withColumn("DayOfWeek", ((F.dayofweek(F.col("Date")) + 5) % 7 + 1).cast("int")))
 df = df.withColumn("IsWeekend", F.when(F.col("DayOfWeek").isin(6, 7), 1).otherwise(0))
 
 w_store = Window.partitionBy("Store").orderBy("Date")
