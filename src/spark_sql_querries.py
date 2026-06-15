@@ -4,7 +4,7 @@ spark = SparkSession.builder.appName("Rossmann_SparkSQL").config("spark.sql.shuf
 
 spark.sparkContext.setLogLevel("WARN")
 
-# Đọc dữ liệu từ HDFS
+
 HDFS_ROOT = "hdfs://localhost:9000/user/project/rossmann"
 
 df_sales = spark.read.csv(f"{HDFS_ROOT}/sale.csv", header = True, inferSchema=True)
