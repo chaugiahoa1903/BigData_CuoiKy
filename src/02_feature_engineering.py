@@ -119,16 +119,16 @@ df = df.persist(StorageLevel.MEMORY_AND_DISK)
 print("Số dòng trước:", n_before, " sau khi dropna:", df.count())
 print("Đã persist df với StorageLevel.MEMORY_AND_DISK")
 
-# B1: tap feature UNG VIEN = tat ca cot so, loai label/dinh danh/leakage/raw
+
 exclude_cols = ["Date", "Sales", "Sale", "Customers", "PromoInterval", "Store",
                 "StateHoliday", "StoreType", "Assortment", "DayOfWeek",
-                "Sales_per_Customer"]   # <- leakage neu co
+                "Sales_per_Customer"]  
 numeric_types = ("int", "bigint", "double", "float", "smallint", "tinyint", "long")
 candidate_features = [c for c, t in df.dtypes
                       if c not in exclude_cols and t in numeric_types]
 print("So feature ung vien:", len(candidate_features))
 
-# B2: UnivariateFeatureSelector - F-test (feature lien tuc, label lien tuc)
+
 assembler = VectorAssembler(inputCols=candidate_features,
                             outputCol="features_vec", handleInvalid="skip")
 assembled = assembler.transform(df)
@@ -137,11 +137,11 @@ selector = UnivariateFeatureSelector(
     featuresCol="features_vec",
     outputCol="selectedFeatures",
     labelCol="Sales",
-    selectionMode="fpr"          # giu feature co p-value < nguong
+    selectionMode="fpr"          
 )
 selector.setFeatureType("continuous")
 selector.setLabelType("continuous")
-selector.setSelectionThreshold(0.05)   # p < 0.05
+selector.setSelectionThreshold(0.05)  
 
 sel_model = selector.fit(assembled)
 selected_idx = list(sel_model.selectedFeatures)
@@ -157,11 +157,11 @@ assembler_corr = VectorAssembler(inputCols=candidate_features + ["Sales"],
 corr_mat = Correlation.corr(
     assembler_corr.transform(df).select("corr_vec"), "corr_vec"
 ).head()[0].toArray()
-r_with_sales = np.nan_to_num(corr_mat[:-1, -1], nan=0.0)   # cot cuoi = tuong quan voi Sales
+r_with_sales = np.nan_to_num(corr_mat[:-1, -1], nan=0.0)   
 
 n = df.count()
-F_stat  = (n - 2) * (r_with_sales ** 2) / (1 - r_with_sales ** 2 + 1e-12)   # F-test 1 bien
-p_value = f_dist.sf(F_stat, 1, n - 2)                                        # p tu F(1, n-2)
+F_stat  = (n - 2) * (r_with_sales ** 2) / (1 - r_with_sales ** 2 + 1e-12)  
+p_value = f_dist.sf(F_stat, 1, n - 2)                                        
 
 result = pd.DataFrame({
     "feature":  candidate_features,
