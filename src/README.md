@@ -30,4 +30,8 @@ python 03_mllib_training.py
 
 # Chạy Web App
 streamlit run webapp/app.py
+
+#Chạy Streaming Pipeline
+
+python streaming.py
 ```
