@@ -40,18 +40,18 @@ sdf = sdf.withColumn("_row_id", row_number().over(w))
 train_sdf = sdf.filter(F.col("_row_id") <= train_count).drop("_row_id")
 test_sdf  = sdf.filter(F.col("_row_id") >  train_count).drop("_row_id")
 
-train_sdf.cache()
-test_sdf.cache()
+train_sdf.cache() # Cache dữ liệu train vào bộ nhớ
+test_sdf.cache()   # Cache dữ liệu test vào bộ nhớ
 print(f"Số mẫu train : {train_sdf.count():,}")
 print(f"Số mẫu test  : {test_sdf.count():,}")
 
-assembler = VectorAssembler(inputCols=features, outputCol="features_vec", handleInvalid="skip")
-scaler    = StandardScaler(inputCol="features_vec", outputCol="features_scaled",
-                           withStd=True, withMean=False)
+assembler = VectorAssembler(inputCols=features, outputCol="features_vec", handleInvalid="skip")  # Gộp các biến thành vector đặc trưng
+scaler    = StandardScaler(inputCol="features_vec", outputCol="features_scaled",    # Chuẩn hóa dữ liệu đầu vào
+                           withStd=True, withMean=False) 
 
-evaluator_rmse = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="rmse")
-evaluator_mae  = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="mae")
-evaluator_r2   = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="r2")
+evaluator_rmse = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="rmse")  # Đánh giá RMSE
+evaluator_mae  = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="mae")  # Đánh giá MAE
+evaluator_r2   = RegressionEvaluator(labelCol="Sales", predictionCol="prediction", metricName="r2")  # Đánh giá R²
 
 #Phân tích kế hoạch thực thi
 print("EXPLAIN: Kế hoạch tiền xử lý trên train_sdf")
@@ -64,8 +64,8 @@ tune_sdf.cache()
 print(f"Số mẫu tune  : {tune_sdf.count():,}  (10% train)")
 
 print(f"\n{'='*55}\n  Tuning: RandomForestRegressor\n{'='*55}")
-rf_tune = RandomForestRegressor(featuresCol="features_scaled", labelCol="Sales", seed=42)
-pipeline_rf_tune = Pipeline(stages=[assembler, scaler, rf_tune])
+rf_tune = RandomForestRegressor(featuresCol="features_scaled", labelCol="Sales", seed=42) # Mô hình RF dùng để tuning
+pipeline_rf_tune = Pipeline(stages=[assembler, scaler, rf_tune])   # Pipeline tiền xử lý + RF
 rf_param_grid = (
     ParamGridBuilder()
     .addGrid(rf_tune.numTrees,            [50, 100])
