@@ -10,12 +10,12 @@ from pyspark.ml.stat import Correlation
 spark = (
     SparkSession.builder
     .appName("Rossmann_01_EDA_Spark").getOrCreate()
-    .coonfig("spark.sql.shuffle.partitions", "4")
+    .config("spark.sql.shuffle.partitions", "4")
     .getOrCreate()
 )
 spark.sparkContext.setLogLevel("WARN")
 print("Spark version:", spark.version)
-HDFS_ROOT = "hdfs://localhost:9000/user/user/rossmann/"
+HDFS_ROOT = "hdfs://localhost:9000/user/rossmann/"
 #Ghi 1 file csv ra hdfs
 def save_single_csv(sdf, hdfs_path):
     tmp = hdfs_path + "_tmp"
