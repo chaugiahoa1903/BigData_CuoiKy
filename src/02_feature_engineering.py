@@ -21,7 +21,7 @@ spark = (
     .config("spark.sql.legacy.timeParserPolicy", "LEGACY")
     .getOrCreate()
 )
-spark.sparkContext.setLogLevel("WARN")
+spark.sparkContext.setLogLevel("WARN") # Giảm log không cần thiết
 HDFS_ROOT = "hdfs://localhost:9000/user/project/rossmann"
 
 #Hàm bổ trợ lưu DataFrame -> CSV rồi push lên HDFS
@@ -87,7 +87,7 @@ df = (df
       .withColumn("DayOfWeek", ((F.dayofweek(F.col("Date")) + 5) % 7 + 1).cast("int")))
 df = df.withColumn("IsWeekend", F.when(F.col("DayOfWeek").isin(6, 7), 1).otherwise(0))
 
-w_store = Window.partitionBy("Store").orderBy("Date")
+w_store = Window.partitionBy("Store").orderBy("Date") # Window theo từng cửa hàng và thời gian
 for lag in [1, 3, 7, 14]:
     df = df.withColumn(f"Sales_lag_{lag}",     F.lag("Sales", lag).over(w_store))
     df = df.withColumn(f"Customers_lag_{lag}", F.lag("Customers", lag).over(w_store))
@@ -102,7 +102,7 @@ for w in [7, 14]:
 
 df = (df
       .withColumn("Promo_Weekend", F.col("Promo") * F.col("IsWeekend"))
-      .withColumn("Promo_Month",   F.col("Promo") * F.col("Month")))
+      .withColumn("Promo_Month",   F.col("Promo") * F.col("Month")))   # Tạo biến tương tác
 
 df, _ = add_dummies(df, "DayOfWeek", drop_first=False)
 for col in ["StateHoliday", "StoreType", "Assortment"]:
@@ -130,7 +130,7 @@ print("So feature ung vien:", len(candidate_features))
 
 
 assembler = VectorAssembler(inputCols=candidate_features,
-                            outputCol="features_vec", handleInvalid="skip")
+                            outputCol="features_vec", handleInvalid="skip")  # Gộp feature thành vector MLlib
 assembled = assembler.transform(df)
 
 selector = UnivariateFeatureSelector(
@@ -144,7 +144,7 @@ selector.setLabelType("continuous")
 selector.setSelectionThreshold(0.05)  
 
 sel_model = selector.fit(assembled)
-selected_idx = list(sel_model.selectedFeatures)
+selected_idx = list(sel_model.selectedFeatures)    # Lấy vị trí các feature được giữ
 features = [candidate_features[i] for i in selected_idx]
 dropped  = [c for c in candidate_features if c not in features]
 
@@ -223,6 +223,6 @@ plt.show()
 save_single_csv(df, f"{HDFS_ROOT}/df_features.csv")
 save_json_hdfs(features, f"{HDFS_ROOT}/features.json")
 
-spark.stop()
+spark.stop() # Dừng Spark Session
 print("[02] Done.")
 
