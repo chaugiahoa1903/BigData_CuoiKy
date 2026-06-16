@@ -16,19 +16,19 @@ from pyspark.ml.tuning import ParamGridBuilder, CrossValidator
 
 spark = (
     SparkSession.builder
-    .appName("Rossmann_03_MLlib")
-    .config("spark.sql.shuffle.partitions", "4")
-    .getOrCreate()
+    .appName("Rossmann_03_MLlib") # Đặt tên ứng dụng Spark
+    .config("spark.sql.shuffle.partitions", "4") # Số partition khi shuffle dữ liệu
+    .getOrCreate()  # Khởi tạo Spark Session
 )
 spark.sparkContext.setLogLevel("WARN")
 
 HDFS_ROOT = "hdfs://localhost:9000/user/project/rossmann"
 
-features_str = "\n".join(spark.sparkContext.textFile(f"{HDFS_ROOT}/features.json").collect())
+features_str = "\n".join(spark.sparkContext.textFile(f"{HDFS_ROOT}/features.json").collect()) # Đọc file JSON chứa danh sách biến
 features = json.loads(features_str)
 print("Features:", len(features))
 
-sdf = spark.read.csv(f"{HDFS_ROOT}/df_features.csv", header=True, inferSchema=True)
+sdf = spark.read.csv(f"{HDFS_ROOT}/df_features.csv", header=True, inferSchema=True)  # Đọc dữ liệu đã Feature Engineering
 print("Loaded df_features:", sdf.count(), "rows,", len(sdf.columns), "cols")
 
 total       = sdf.count()
