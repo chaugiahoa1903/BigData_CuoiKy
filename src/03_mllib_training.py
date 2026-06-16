@@ -70,7 +70,7 @@ rf_param_grid = (
     ParamGridBuilder()
     .addGrid(rf_tune.numTrees,            [50, 100])
     .addGrid(rf_tune.maxDepth,            [6, 8])
-    .addGrid(rf_tune.minInstancesPerNode, [2])
+    .addGrid(rf_tune.minInstancesPerNode, [2])   # Số mẫu tối thiểu mỗi node
     .build()
 )
 cv_rf = CrossValidator(estimator=pipeline_rf_tune, estimatorParamMaps=rf_param_grid,
@@ -148,16 +148,16 @@ best_model_name  = results_df["RMSE"].idxmin()
 best_mllib_model = mllib_models[best_model_name]
 print(f"\nModel tốt nhất: {best_model_name}")
 
-def report_importance(fitted_pipeline, feature_names, model_name, top_n=20):
+def report_importance(fitted_pipeline, feature_names, model_name, top_n=20):  # Lấy model cuối cùng trong Pipeline
     stage = fitted_pipeline.stages[-1]
     print(f"\n{'='*55}\n  Feature importance: {model_name}\n{'='*55}")
-    if hasattr(stage, "featureImportances"):
+    if hasattr(stage, "featureImportances"): # Với RF và GBT
         vals = stage.featureImportances.toArray()
         ranked = sorted(zip(feature_names, vals), key=lambda x: x[1], reverse=True)
         for nm, v in ranked[:top_n]:
             print(f"  {nm:30s} {v:.5f}")
         return ranked
-    elif hasattr(stage, "coefficients"):
+    elif hasattr(stage, "coefficients"): # Với Linear Regression
         vals = stage.coefficients.toArray()
         ranked = sorted(zip(feature_names, vals), key=lambda x: abs(x[1]), reverse=True)
         for nm, v in ranked[:top_n]:
@@ -206,5 +206,5 @@ MODEL_SAVE_PATH = f"{HDFS_ROOT}/models/{best_model_name}"
 best_mllib_model.write().overwrite().save(MODEL_SAVE_PATH)
 print(f"Đã lưu model tại: {MODEL_SAVE_PATH}")
 
-spark.stop()
+spark.stop()     # Dừng Spark Session
 print("[03] Done.")
